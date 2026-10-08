@@ -1,0 +1,51 @@
+export_column,source_id,quantity
+DKA.M16_C-Phase - Active Power (kW),52,193
+DKA.M15_C-Phase - Active Power (kW),54,193
+DKA.M20_B-Phase - Active Power (kW),55,193
+DKA.M20_A-Phase - Active Power (kW),56,193
+DKA.M16_A-Phase - Active Power (kW),57,193
+DKA.M17_C-Phase - Active Power (kW),58,193
+DKA.M19_C-Phase - Active Power (kW),59,193
+DKA.M18_A-Phase - Active Power (kW),60,193
+DKA.M15_A-Phase - Active Power (kW),61,193
+DKA.M17_A-Phase - Active Power (kW),63,193
+DKA.M17_B-Phase - Active Power (kW),64,193
+DKA.M16_B-Phase - Active Power (kW),66,193
+DKA.M8_A-Phase - Active Power (kW),67,193
+DKA.M8_C-Phase - Active Power (kW),68,193
+DKA.M4_B-Phase - Active Power (kW),69,193
+DKA.M5_A-Phase - Active Power (kW),70,193
+DKA.M2_C-Phase - Active Power (kW),71,193
+DKA.M15_B-Phase - Active Power (kW),72,193
+DKA.M19_A-Phase - Active Power (kW),73,193
+DKA.M18_C-Phase - Active Power (kW),74,193
+DKA.M18_B-Phase - Active Power (kW),77,193
+DKA.M11_3-Phase - Active Power (kW),78,193
+DKA.M6_A-Phase - Active Power (kW),79,193
+DKA.M2_A-Phase - Active Power (kW),81,193
+DKA.M5_B-Phase - Active Power (kW),84,193
+DKA.M7_A-Phase - Active Power (kW),85,193
+DKA.M2_B-Phase - Active Power (kW),86,193
+DKA.M9_A+C-Phases - Active Power (kW),87,193
+DKA.M3_B-Phase - Active Power (kW),89,193
+DKA.M3_A-Phase - Active Power (kW),90,193
+DKA.M9_B-Phase - Active Power (kW),91,193
+DKA.M6_B-Phase - Active Power (kW),92,193
+DKA.M4_A-Phase - Active Power (kW),93,193
+DKA.M3_C-Phase - Active Power (kW),95,193
+DKA.M10_B+C-Phases - Active Power (kW),97,193
+DKA.M8_B-Phase - Active Power (kW),98,193
+DKA.M4_C-Phase - Active Power (kW),99,193
+DKA.M1_A-Phase - Active Power (kW),100,193
+DKA.M9_3-Phase - Active Power (kW),102,193
+DKA.M1_B-Phase - Active Power (kW),103,193
+DKA.M1_C-Phase - Active Power (kW),105,193
+DKA.M5_C-Phase - Active Power (kW),106,193
+DKA.M15_C-Phase_II - Active Power (kW),212,193
+DKA.M16_A-Phase_II - Active Power (kW),213,193
+DKA.M18_B-Phase_II - Active Power (kW),214,193
+DKA.M4_C-Phase_II - Active Power (kW),218,193
+DKA.WeatherStation - Weather Daily Rainfall (mm),101,
+DKA.WeatherStation - Weather Temperature Celsius (°C),101,
+DKA.WeatherStation - Global Horizontal Radiation (W/m²),101,
+DKA.WeatherStation - Wind Speed (m/s),101,

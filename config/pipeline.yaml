@@ -1,0 +1,86 @@
+data_root: data
+site:
+  latitude: -23.7624      # TODO verify against DKASC map
+  longitude: 133.8754     # TODO verify
+  altitude_m: 560
+  tz: Australia/Darwin
+dkasc:
+  yearly_files:            # exact existing names, do not rename files
+    - Alice_Springs_2024.csv
+    - Alice_Springs_2025.csv
+    - Alice_Springs_2026.csv
+  api_dir: dkasc_api_5min
+  api_name_map: dkasc_api_5min/source_names.csv
+  weather_source_id: 101
+  metadata_file: arrays_metadata.csv
+  overrides_file: array_overrides.csv
+open_meteo:
+  endpoint: https://previous-runs-api.open-meteo.com/v1/forecast
+  raw_dir: open_meteo_raw
+  variables: [shortwave_radiation, direct_normal_irradiance, diffuse_radiation,
+              temperature_2m, cloud_cover, wind_speed_10m]
+  lead_suffix: _previous_day1
+  request_chunk: year
+  sleep_s: 1
+  segments:                      # NEW. Ordered, non-overlapping, by LOCAL date of ts_local_start
+    - model: icon_seamless
+      wx_source: 0
+      from_local: null           # null = start of data
+      to_local: 2024-12-31
+    - model: ecmwf_ifs025
+      wx_source: 1
+      from_local: 2025-01-01
+      to_local: null             # null = open-ended (live)
+window:
+  start: auto              # auto = first full local day with complete Open-Meteo coverage
+  end: 2026-02-11          # inclusive, local date; v1 will move this forward
+qc:
+  neg_clip_kw: -0.5        # values in [neg_clip_kw, 0) -> 0 ; below -> invalid
+  max_ratio_kwp: 1.2       # value > 1.2 * kwp -> invalid (skipped if kwp unknown)
+  stuck_min_records: 6     # identical non-zero value for >= 6 consecutive daytime records -> stuck
+  min_coverage: 0.8333     # >= 10 of 12 valid 5-min records per hour, else target = NaN
+  daytime_zenith_max: 85   # deg, for "daytime" in QC rules
+  near_zero_kwh_per_kwp_day: 0.5   # array-level exclusion threshold
+physics:                          # NEW
+  system_efficiency: 0.86         # PVWatts default (14 % losses)
+  t_ref_c: 25
+  gamma_per_c:                    # power temperature coefficient by technology
+    poly-Si: -0.0040
+    mono-Si: -0.0039
+    CdTe:    -0.0028
+    CIGS:    -0.0036
+    HIT:     -0.0026
+    a-Si:    -0.0020
+    CPV:     null                 # not modelled -> p_phys_norm = NaN
+features:                         # NEW
+  pr_min_valid_hours_per_day: 6
+  pr_windows: {pr_7d: {days: 7, min_days: 3}, pr_30d: {days: 30, min_days: 10}}
+splits:
+  array:
+    coldstart_source_ids: [105, 81, 79, 92, 56, 68]
+  time:
+    recipes:
+      fleet_v1:
+        train: [2024-01-20, 2024-12-31]
+        val: [2025-01-01, 2025-04-30]
+        test: [2025-05-01, 2025-10-01]
+        feature_groups: [base]
+        array_scope: train
+      fleet_v2:
+        train: [2024-01-20, 2025-12-31]
+        val: [2026-01-01, 2026-04-30]
+        test: [2026-05-01, 2026-10-01]
+        feature_groups: [base]
+        array_scope: train
+      v1_vs_v2:
+        train: null
+        val: null
+        test: [2026-05-01, 2026-10-01]
+        feature_groups: [base]
+        array_scope: train
+      rolling:
+        train: null
+        val: null
+        test_days: 14
+        feature_groups: [base]
+        array_scope: train

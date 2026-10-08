@@ -1,0 +1,8 @@
+source_id,valid_from_local,valid_to_local,exclude,reason
+91,,,true,tracker performance unverified (yield below fixed arrays)
+87,,,true,tracker performance unverified (yield below fixed arrays)
+78,,,true,tracker performance unverified (yield below fixed arrays)
+86,,,true,tracker performance unverified (yield below fixed arrays)
+95,,,true,tracker performance unverified (yield below fixed arrays)
+97,,,true,tracker performance unverified (yield below fixed arrays)
+89,,,true,tracker performance unverified (yield below fixed arrays)
