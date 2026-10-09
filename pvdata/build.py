@@ -41,6 +41,7 @@ from .features import (
 )
 from .physics import compute_p_phys_norm
 from .pr import compute_pr_features
+from .qc_daily import apply_dead_day_qc, DeadDaySummary
 
 logger = logging.getLogger(__name__)
 
@@ -294,7 +295,7 @@ def build(
         suffixes=("", "_meta"),
     )
 
-    # ---- Step 11: Physics, PR, and Cyclical Features ----
+    # ---- Step 11: Physics, Split Columns, Dead-Day QC, and PR Features ----
     logger.info("=== Computing physics baseline (p_phys_norm) ===")
     train_table["p_phys_norm"] = compute_p_phys_norm(
         poa_fc=train_table["poa_fc"],
@@ -302,6 +303,23 @@ def build(
         technology=train_table["technology"],
         cfg=cfg,
     )
+
+    # Compute array_split and time_split before dead-day QC
+    coldstart_set = set(cfg.coldstart_source_ids)
+    excluded_set = set(arrays_meta.loc[arrays_meta["excluded"].fillna(False).astype(bool), "source_id"])
+
+    def _get_array_split(sid: int) -> str:
+        if sid in coldstart_set:
+            return "coldstart"
+        if sid in excluded_set:
+            return "excluded"
+        return "train"
+
+    train_table["array_split"] = train_table["source_id"].map(_get_array_split)
+    train_table["time_split"] = "unassigned"
+
+    logger.info("=== Applying daily QC (dead days) ===")
+    train_table, dead_days_summary = apply_dead_day_qc(train_table, cfg)
 
     logger.info("=== Computing categorical codes and cyclical time features ===")
     cats = encode_categories(train_table)
@@ -318,21 +336,6 @@ def build(
     pr_df = compute_pr_features(train_table, cfg)
     train_table["pr_7d"] = pr_df["pr_7d"]
     train_table["pr_30d"] = pr_df["pr_30d"]
-
-    # ---- Step 12: Split columns ----
-    train_table["time_split"] = "unassigned"
-
-    coldstart_set = set(cfg.coldstart_source_ids)
-    excluded_set = set(arrays_meta.loc[arrays_meta["excluded"].fillna(False).astype(bool), "source_id"])
-
-    def _get_array_split(sid: int) -> str:
-        if sid in coldstart_set:
-            return "coldstart"
-        if sid in excluded_set:
-            return "excluded"
-        return "train"
-
-    train_table["array_split"] = train_table["source_id"].map(_get_array_split)
 
     # ---- Reorder columns ----
     final_cols = [c for c in TRAIN_TABLE_COLUMNS if c in train_table.columns]
@@ -440,6 +443,7 @@ def build(
         "open_meteo_grid": grid_info_by_model,
         "weather_segments": weather_segments_summary,
         "weather_gaps": window_gaps,
+        "dead_days": dead_days_summary.dead_days_dict,
         "row_counts": {
             "labels_hourly": len(labels_hourly),
             "weather_hourly": len(weather_df),
@@ -464,6 +468,7 @@ def build(
         window_start=window_start,
         window_end=window_end,
         window_gaps=window_gaps,
+        dead_days_summary=dead_days_summary,
     )
     qc_path = out_dir / "qc_report.md"
     with open(qc_path, "w", encoding="utf-8") as fh:
@@ -496,6 +501,7 @@ def _generate_qc_report(
     window_start: str,
     window_end: str,
     window_gaps: Optional[list] = None,
+    dead_days_summary: Optional[DeadDaySummary] = None,
 ) -> str:
     """Generate initial QC report content (validate.py will append to this)."""
     lines = [
@@ -550,6 +556,26 @@ def _generate_qc_report(
             lines.append(f"- Model `{g['model']}`: {g['start_utc']} → {g['end_utc']} ({g['hours']} hours)")
     else:
         lines.append("No weather gaps inside the window. ✅")
+
+    if dead_days_summary is not None:
+        lines += [
+            "",
+            "## Dead Days",
+            "",
+            f"- **Total dead array-days:** {dead_days_summary.total_dead_days}",
+            f"- **Hourly rows affected:** {dead_days_summary.hourly_rows_affected} ({dead_days_summary.usable_rows_removed} usable rows removed)",
+            "",
+        ]
+        if not dead_days_summary.by_array.empty:
+            cols = ["source_id", "array_no", "days", "first", "last"]
+            header = ["source_id", "array_no", "days", "first", "last"]
+            lines.append("| " + " | ".join(header) + " |")
+            lines.append("| " + " | ".join(["---"] * len(header)) + " |")
+            for _, row in dead_days_summary.by_array.iterrows():
+                r_vals = [str(row[c]) for c in cols]
+                lines.append("| " + " | ".join(r_vals) + " |")
+        else:
+            lines.append("No dead days detected. ✅")
 
     lines += [
         "",

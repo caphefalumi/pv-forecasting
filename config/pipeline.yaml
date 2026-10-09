@@ -41,6 +41,9 @@ qc:
   min_coverage: 0.8333     # >= 10 of 12 valid 5-min records per hour, else target = NaN
   daytime_zenith_max: 85   # deg, for "daytime" in QC rules
   near_zero_kwh_per_kwp_day: 0.5   # array-level exclusion threshold
+  dead_day_max_ratio: 0.05        # array output < 5 % of its physics expectation
+  dead_day_min_fleet_ratio: 0.5   # while the fleet median is >= 50 % of expectation
+  dead_day_min_hours: 6           # daytime hours needed to judge a day
 physics:                          # NEW
   system_efficiency: 0.86         # PVWatts default (14 % losses)
   t_ref_c: 25

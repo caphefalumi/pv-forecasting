@@ -70,6 +70,9 @@ class PipelineConfig:
         self.min_coverage: float = float(qc.get("min_coverage", 0.8333))
         self.daytime_zenith_max: float = float(qc.get("daytime_zenith_max", 85))
         self.near_zero_kwh_per_kwp_day: float = float(qc.get("near_zero_kwh_per_kwp_day", 0.5))
+        self.dead_day_max_ratio: float = float(qc.get("dead_day_max_ratio", 0.05))
+        self.dead_day_min_fleet_ratio: float = float(qc.get("dead_day_min_fleet_ratio", 0.5))
+        self.dead_day_min_hours: int = int(qc.get("dead_day_min_hours", 6))
 
         # Physics
         physics = data.get("physics", {})
