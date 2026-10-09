@@ -1,0 +1,6 @@
+[core]
+    remote = supabase
+['remote "supabase"']
+    url = s3://processed_data/dvc
+    endpointurl = https://lxtdcahxubojfipsetml.supabase.co/storage/v1/s3
+    access_key_id = lxtdcahxubojfipsetml
