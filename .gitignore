@@ -1,6 +1,5 @@
 # Data: never commit DKASC measurements or derived data
 data/*
-!data/Alice_*
 !data/arrays_metadata.csv
 !data/array_overrides.csv
 !data/dkasc_api_5min/
