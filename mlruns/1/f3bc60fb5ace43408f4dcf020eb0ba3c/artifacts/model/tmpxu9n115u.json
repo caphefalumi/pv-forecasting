@@ -1,0 +1,27 @@
+{
+  "feature_cols": [
+    "ghi_fc",
+    "dni_fc",
+    "dhi_fc",
+    "temp_fc",
+    "cloud_fc",
+    "wind_fc",
+    "wx_source",
+    "solar_zenith",
+    "solar_azimuth",
+    "ghi_clear",
+    "kt_fc",
+    "poa_fc",
+    "temp_cell_fc",
+    "p_phys_norm",
+    "kwp",
+    "technology_code",
+    "tracking_code",
+    "tilt_deg",
+    "surface_azimuth_pvlib",
+    "hour_sin",
+    "hour_cos",
+    "doy_sin",
+    "doy_cos"
+  ]
+}
