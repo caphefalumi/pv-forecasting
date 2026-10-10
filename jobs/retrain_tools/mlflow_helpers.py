@@ -29,13 +29,15 @@ EXPERIMENT_NAME       = "pv-lstm-fleet"
 
 def _get_tracking_uri() -> str:
     """Resolve the tracking URI: MLFLOW_TRACKING_URI -> SQL_ALCHEMY_DATABASE_URL -> localhost."""
-    uri = os.environ.get("MLFLOW_TRACKING_URI")
+    uri = os.environ.get("MLFLOW_TRACKING_URI") or os.environ.get("SQL_ALCHEMY_DATABASE_URL")
     if uri:
+        # Supabase pooler: port 5432 is Session mode (limited to 15 clients).
+        # Port 6543 is Transaction mode (supports concurrent serverless/CI clients).
+        if "pooler.supabase.com:5432" in uri:
+            uri = uri.replace("pooler.supabase.com:5432", "pooler.supabase.com:6543")
         return uri
-    db_url = os.environ.get("SQL_ALCHEMY_DATABASE_URL")
-    if db_url:
-        return db_url
     return "http://127.0.0.1:5001"
+
 
 
 def _get_client():
