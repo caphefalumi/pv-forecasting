@@ -27,6 +27,17 @@ REGISTERED_MODEL_NAME = "pv-lstm-fleet"
 EXPERIMENT_NAME       = "pv-lstm-fleet"
 
 
+def _get_tracking_uri() -> str:
+    """Resolve the tracking URI: MLFLOW_TRACKING_URI -> SQL_ALCHEMY_DATABASE_URL -> localhost."""
+    uri = os.environ.get("MLFLOW_TRACKING_URI")
+    if uri:
+        return uri
+    db_url = os.environ.get("SQL_ALCHEMY_DATABASE_URL")
+    if db_url:
+        return db_url
+    return "http://127.0.0.1:5001"
+
+
 def _get_client():
     """Return an MLflow MlflowClient connected to the configured tracking URI."""
     try:
@@ -35,9 +46,10 @@ def _get_client():
     except ImportError as exc:
         raise ImportError("mlflow is required: pip install mlflow") from exc
 
-    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5001")
+    tracking_uri = _get_tracking_uri()
     mlflow.set_tracking_uri(tracking_uri)
     return MlflowClient(), mlflow
+
 
 
 
@@ -83,8 +95,9 @@ def log_retrain_run(
     except ImportError as exc:
         raise ImportError("mlflow is required: pip install mlflow") from exc
 
-    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5001")
+    tracking_uri = _get_tracking_uri()
     mlflow.set_tracking_uri(tracking_uri)
+
 
     mlflow.set_experiment(EXPERIMENT_NAME)
 
@@ -302,6 +315,7 @@ def promote_to_champion(
 
 def get_mlflow_run_url(run_id: str) -> str:
     """Build the MLflow UI URL for a run."""
-    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5001")
-    return f"{tracking_uri.rstrip('/')}/#/runs/{run_id}"
+    ui_url = os.environ.get("MLFLOW_UI_URL", "http://127.0.0.1:5001")
+    return f"{ui_url.rstrip('/')}/#/runs/{run_id}"
+
 
