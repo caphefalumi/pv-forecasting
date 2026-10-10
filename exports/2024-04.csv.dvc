@@ -1,0 +1,5 @@
+outs:
+- md5: 41378b0e6f776f74248f01d51e39e947
+  size: 3422331
+  hash: md5
+  path: 2024-04.csv

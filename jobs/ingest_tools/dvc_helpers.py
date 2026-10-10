@@ -1,15 +1,11 @@
 """
-dvc_helpers.py — DVC initialisation, file tracking, and remote push.
+dvc_helpers.py — DVC initialisation, file tracking, remote push, and git commit.
 
 DVC remote is Supabase S3-compatible storage:
   - Endpoint:   {SUPABASE_URL}/storage/v1/s3
   - Bucket:     SUPABASE_RAW_DATA_BUCKET  (under a "dvc/" prefix)
   - Access key: project ref (subdomain of SUPABASE_URL)
   - Secret key: SUPABASE_SERVICE_ROLE_KEY  (stored in local config, never committed)
-
-Run once:  ensure_dvc_initialized(repo_root)
-Per file:  dvc_add(path)
-At end:    dvc_push()
 """
 
 from __future__ import annotations
@@ -36,6 +32,18 @@ def _run(cmd: list[str], cwd: Path | None = None) -> str:
     return result.stdout.strip()
 
 
+def clean_stale_locks(repo_root: Path) -> None:
+    """Remove any stale lock files in .dvc/tmp left over from interrupted runs."""
+    tmp_dir = repo_root / ".dvc" / "tmp"
+    if tmp_dir.exists():
+        for lock_file in tmp_dir.glob("*lock*"):
+            try:
+                lock_file.unlink()
+                logger.debug("Removed stale DVC lock: %s", lock_file.name)
+            except OSError:
+                pass
+
+
 def _remote_already_configured(repo_root: Path, remote_name: str = "supabase") -> bool:
     """Check .dvc/config directly — avoids running `dvc remote list` on broken configs."""
     config_path = repo_root / ".dvc" / "config"
@@ -55,6 +63,7 @@ def ensure_dvc_initialized(repo_root: Path, remote_name: str = "supabase") -> No
     - Adds the remote only if it is not already listed.
     - Stores secret_access_key in LOCAL config (.dvc/config.local, gitignored).
     """
+    clean_stale_locks(repo_root)
     dvc_dir = repo_root / ".dvc"
     if not dvc_dir.exists():
         logger.info("Initialising DVC in %s", repo_root)
@@ -71,12 +80,8 @@ def ensure_dvc_initialized(repo_root: Path, remote_name: str = "supabase") -> No
     service_role_key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
     bucket = os.environ["SUPABASE_RAW_DATA_BUCKET"]
 
-    # Supabase project ref = first part of the hostname
-    # e.g. https://abcdefgh.supabase.co/rest/v1/  →  abcdefgh
     parsed = urlparse(supabase_url)
     project_ref = parsed.hostname.split(".")[0]
-    # Always build endpoint from scheme+hostname only, ignoring any trailing path
-    # (SUPABASE_URL may contain /rest/v1/ which must not be included)
     base_url = f"{parsed.scheme}://{parsed.hostname}"
     endpoint = f"{base_url}/storage/v1/s3"
 
@@ -102,12 +107,36 @@ def dvc_add(file_path: Path) -> None:
     Track a file with DVC (`dvc add <file>`).
     Creates/updates the companion .dvc pointer file.
     """
-    _run(["dvc", "add", str(file_path)])
+    repo_root = file_path.resolve().parents[1] if file_path.parent.name == "exports" else file_path.parent
+    clean_stale_locks(repo_root)
+    _run(["dvc", "add", str(file_path)], cwd=repo_root)
     logger.info("DVC tracked: %s  →  %s.dvc", file_path.name, file_path.name)
 
 
-def dvc_push(remote_name: str = "supabase") -> None:
-    """Push all DVC-tracked files to the configured remote."""
+def dvc_push(repo_root: Path, target: Path | str | None = None, remote_name: str = "supabase") -> None:
+    """Push DVC-tracked files to the configured remote."""
+    clean_stale_locks(repo_root)
+    cmd = ["dvc", "push", "-r", remote_name]
+    if target:
+        cmd.append(str(target))
     logger.info("Pushing DVC cache to remote '%s' …", remote_name)
-    _run(["dvc", "push", "-r", remote_name])
+    _run(cmd, cwd=repo_root)
     logger.info("DVC push complete ✅")
+
+
+def git_commit_dvc_changes(repo_root: Path, message: str) -> bool:
+    """
+    Stage and commit .dvc files and exports/.gitignore if changed.
+
+    Returns True if a commit was made, False if there was nothing to commit.
+    """
+    # Check if there are any changes in exports/ or .dvc/
+    status = _run(["git", "status", "--porcelain", "exports", ".dvc"], cwd=repo_root)
+    if not status.strip():
+        logger.info("No DVC pointer changes to commit in git.")
+        return False
+
+    _run(["git", "add", "exports", ".dvc/config"], cwd=repo_root)
+    _run(["git", "commit", "-m", message], cwd=repo_root)
+    logger.info("Git committed DVC version changes: %s", message)
+    return True
