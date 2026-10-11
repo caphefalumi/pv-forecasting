@@ -251,7 +251,9 @@ def _make_module(input_size, hidden_size, num_layers, dropout):
             out, _ = self.lstm(x)
             last = out[:, -1, :]          # last timestep
             pred = self.head(last).squeeze(-1)
-            return torch.clamp(pred, min=0.0)  # target_norm ≥ 0
+            if not self.training:
+                return torch.clamp(pred, min=0.0)  # target_norm ≥ 0 at inference
+            return pred
 
     return _Inner()
 

@@ -119,3 +119,32 @@ def test_api_chunks_missing_dir_returns_three(tmp_path):
     from pvdata.io_dkasc import _load_api_chunks
     res = _load_api_chunks(tmp_path / "nope", tmp_path / "nope.csv", {52})
     assert len(res) == 3
+
+
+def test_lstm_model_gradients_flow_during_training():
+    """Verify gradients are not killed by clamp during training."""
+    import torch
+    import torch.nn as nn
+    from jobs.retrain_tools.lstm_model import _make_module
+
+    torch.manual_seed(42)
+    model = _make_module(input_size=10, hidden_size=32, num_layers=1, dropout=0.0)
+    model.train()
+
+    x = torch.randn(16, 6, 10)
+    y = torch.ones(16) * 0.5
+    pred = model(x)
+    loss = nn.MSELoss()(pred, y)
+    loss.backward()
+
+    # Gradients must be non-zero for head parameters
+    for p in model.parameters():
+        assert p.grad is not None
+        assert p.grad.abs().sum().item() > 0.0
+
+    # In eval mode, negative outputs must be clamped to zero
+    model.eval()
+    with torch.no_grad():
+        eval_pred = model(x)
+        assert (eval_pred >= 0.0).all().item()
+
