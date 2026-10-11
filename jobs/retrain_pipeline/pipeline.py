@@ -162,8 +162,15 @@ def run_retrain_pipeline(
                 )
 
                 # ── Step 7b: Upload checkpoint to Supabase ─────────────────
-                logger.info("Uploading model checkpoint to Supabase artifacts/ …")
-                upload_model_artifact(run_id, checkpoint_path)
+                if is_better or is_first_model:
+                    logger.info("Uploading model checkpoint to Supabase artifacts/ …")
+                    upload_model_artifact(run_id, checkpoint_path)
+                else:
+                    logger.info(
+                        "Challenger did not beat champion (RMSE %.5f >= %.5f). "
+                        "Skipping checkpoint upload to Supabase.",
+                        challenger_rmse, champion_rmse,
+                    )
 
                 # ── Step 7c: Discord notification ──────────────────────────
                 mlflow_url = get_mlflow_run_url(run_id)
