@@ -157,30 +157,20 @@ def log_retrain_run(
             mlflow.log_metric("epoch_train_loss", tl, step=i)
             mlflow.log_metric("epoch_val_loss",   vl, step=i)
 
-        # ── Log Model with PyTorch flavor ──────────────────────────────────
-        import mlflow.pytorch
-        model_info = mlflow.pytorch.log_model(
-            pytorch_model=model,
-            artifact_path="model",
-            serialization_format="pickle",
-            extra_files=[str(checkpoint_path)],
-        )
-
-        # Log feature column list as JSON for reproducibility
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as tmp:
-            json.dump({"feature_cols": feature_cols}, tmp, indent=2)
-            tmp_path = tmp.name
-        mlflow.log_artifact(tmp_path, artifact_path="model")
-        Path(tmp_path).unlink(missing_ok=True)
-
         # ── Register model version ─────────────────────────────────────────
-        mv = mlflow.register_model(
-            model_uri=model_info.model_uri,
+        # Artifacts are stored directly in Supabase Storage (see artifact_store.py).
+        # Register the model version directly pointing to Supabase to prevent
+        # generating local mlruns/ directories.
+        mv = client.create_model_version(
             name=REGISTERED_MODEL_NAME,
+            source=f"supabase://artifacts/{run_id}/checkpoint.pt",
+            run_id=run_id,
+            tags={
+                "artifact_store": "supabase",
+                "checkpoint_file": "checkpoint.pt",
+            },
         )
-        model_version = mv.version
+        model_version = str(mv.version)
 
         logger.info(
             "MLflow run logged: run_id=%s  model_version=%s",
