@@ -35,6 +35,12 @@ def _get_tracking_uri() -> str:
         # Port 6543 is Transaction mode (supports concurrent serverless/CI clients).
         if "pooler.supabase.com:5432" in uri:
             uri = uri.replace("pooler.supabase.com:5432", "pooler.supabase.com:6543")
+        # Transaction mode (port 6543) does not support psycopg3 prepared statements.
+        # Force psycopg2 driver which does not prepare statements on the server.
+        if uri.startswith("postgresql://"):
+            uri = "postgresql+psycopg2://" + uri[len("postgresql://"):]
+        elif uri.startswith("postgres://"):
+            uri = "postgresql+psycopg2://" + uri[len("postgres://"):]
         return uri
     return "http://127.0.0.1:5001"
 

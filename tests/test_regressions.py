@@ -148,3 +148,17 @@ def test_lstm_model_gradients_flow_during_training():
         eval_pred = model(x)
         assert (eval_pred >= 0.0).all().item()
 
+
+def test_tracking_uri_uses_psycopg2_for_supabase_pooler(monkeypatch):
+    """Ensure MLflow tracking URI uses postgresql+psycopg2 to avoid prepared statement issues."""
+    from jobs.retrain_tools.mlflow_helpers import _get_tracking_uri
+
+    monkeypatch.setenv(
+        "MLFLOW_TRACKING_URI",
+        "postgresql://postgres.xxx:pass@aws-0.pooler.supabase.com:5432/postgres",
+    )
+    uri = _get_tracking_uri()
+    assert "pooler.supabase.com:6543" in uri
+    assert uri.startswith("postgresql+psycopg2://")
+
+
