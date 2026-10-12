@@ -68,11 +68,16 @@ def run_ingest_pipeline(
         save_month_csv,
         split_by_month,
     )
+    from jobs.ingest_tools.bootstrap import ensure_raw_data, publish_raw_snapshot
     from jobs.ingest_tools.supabase_storage import get_latest_record_ts, upload_csv
     from pvdata.dataset import load_table
 
     ensure_dvc_initialized(REPO_ROOT)
     EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+    DATA_DIR = REPO_ROOT / "data"
+
+    # ── 1. Bootstrap raw data if running on a fresh machine ───────────────────
+    ensure_raw_data(DATA_DIR)
 
     # ── 2. Check Supabase: find latest record timestamp ───────────────────────
     if dry_run:
@@ -90,6 +95,7 @@ def run_ingest_pipeline(
     else:
         logger.info("=== [Step 2/4] Running pvdata pipeline ===")
         _run_pvdata(until=until)
+
 
     # ── 4. Load + filter + split train_table ───────────────────────────────────
     logger.info("=== [Step 3/4] Loading and splitting train_table ===")
@@ -180,6 +186,9 @@ def run_ingest_pipeline(
         commit_msg = f"chore(data): update DVC data version ({current_active_month})"
         git_commit_dvc_changes(repo_root=REPO_ROOT, message=commit_msg)
 
+        # Update raw data snapshot on Supabase so other machines get latest chunks
+        publish_raw_snapshot(DATA_DIR)
+
     # ── Summary ────────────────────────────────────────────────────────────────
     logger.info("=== Ingest pipeline complete ===")
     if uploaded_files:
@@ -199,8 +208,9 @@ def _load_env() -> None:
         return
     try:
         from dotenv import load_dotenv
-        load_dotenv(env_path, override=False)
+        load_dotenv(env_path, override=True)
         logger.debug("Loaded .env from %s", env_path)
+
     except ImportError:
         logger.warning(
             "python-dotenv not installed — set env vars manually: "
