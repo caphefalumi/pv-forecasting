@@ -1,77 +1,514 @@
 {
-  "title": "PV Forecasting MLOps Overview (Table 17 Multi-Layer Monitoring)",
-  "uid": "pv-forecasting-mlops",
-  "schemaVersion": 39,
-  "version": 1,
-  "refresh": "30s",
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "COS40007 MLOps & DevOps Multi-Layer Monitoring Dashboard (Table 16, 17, 18 & SCRUM-22): Model nMAE (Fleet & 6 Held-Out Arrays), Error Attribution (e_model vs e_forecast), Evidently Feature Drift, Data Quality Flags, FastAPI p95 Latency, and ECS Fargate Resources.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
   "panels": [
     {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "panels": [],
+      "title": "Executive KPIs — Model Accuracy, Cold-Start Generalization, Drift & User Traffic (Table 16 & SCRUM-22)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "description": "Normalised Mean Absolute Error (nMAE) across all 31 DKASC reference arrays. Alert triggers if > threshold for 3 consecutive days (Table 18).",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 3,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green" },
+              { "color": "yellow", "value": 0.08 },
+              { "color": "red", "value": 0.12 }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
       "id": 1,
-      "title": "Layer 1 (Infrastructure): ECS Fargate CPU & Memory Utilization",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
       "targets": [
         {
-          "expr": "aws_ecs_cpuutilization_average{ClusterName=\"pv-forecasting-cluster\"}",
-          "legendFormat": "CPU Utilization (%)"
-        },
-        {
-          "expr": "aws_ecs_memory_utilization_average{ClusterName=\"pv-forecasting-cluster\"}",
-          "legendFormat": "Memory Utilization (%)"
-        }
-      ]
-    },
-    {
-      "id": 2,
-      "title": "Layer 2 (Service): FastAPI Error Rate & p95 Latency",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service=\"solar-api\"}[5m])) by (le))",
-          "legendFormat": "p95 Latency (s)"
-        },
-        {
-          "expr": "sum(rate(http_requests_total{service=\"solar-api\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{service=\"solar-api\"}[5m]))",
-          "legendFormat": "5xx Error Rate"
-        }
-      ]
-    },
-    {
-      "id": 3,
-      "title": "Layer 3 (Data Quality): Ingestion Schema & Physical Range Violations",
-      "type": "stat",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "targets": [
-        {
-          "expr": "sum(pv_ingestion_schema_violations_total)",
-          "legendFormat": "Schema Violations"
-        },
-        {
-          "expr": "sum(pv_ingestion_range_flags_total)",
-          "legendFormat": "Physical Range Flags (Flagged, Not Deleted)"
-        }
-      ]
-    },
-    {
-      "id": 4,
-      "title": "Layer 4 (Model): Daily nMAE (Fleet & 6 Held-Out Arrays) & Evidently Drift Score",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-      "targets": [
-        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
           "expr": "pv_model_nmae{cohort=\"all\"}",
-          "legendFormat": "Fleet nMAE"
-        },
-        {
-          "expr": "pv_model_nmae{cohort=\"held_out_6\"}",
-          "legendFormat": "6 Held-Out Cold-Start Arrays nMAE"
-        },
-        {
-          "expr": "drift_score{site=\"dkasc\"}",
-          "legendFormat": "Evidently Covariate Drift Score (Diagnostic)"
+          "legendFormat": "Fleet nMAE (All 31 Arrays)",
+          "refId": "A"
         }
-      ]
+      ],
+      "title": "Champion Model nMAE (Fleet)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "description": "nMAE on the 6 held-out reference arrays never seen during training (east/west panels, 3 cell technologies). Estimates cold-start error for new user arrays (Section 4.2.c & Table 16).",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 3,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green" },
+              { "color": "yellow", "value": 0.09 },
+              { "color": "red", "value": 0.14 }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "expr": "pv_model_nmae{cohort=\"held_out_6\"}",
+          "legendFormat": "Held-Out 6 Arrays nMAE",
+          "refId": "A"
+        }
+      ],
+      "title": "6 Held-Out Cold-Start Arrays nMAE",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "description": "Evidently covariate drift score (PSI / KS test). Diagnostic only (Info severity) — seasonal weather shifts do not trigger retraining on their own (Table 18).",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 3,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue" },
+              { "color": "yellow", "value": 0.2 },
+              { "color": "orange", "value": 0.35 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "expr": "avg(drift_score{site=\"dkasc\"})",
+          "legendFormat": "Mean Feature Drift Score",
+          "refId": "A"
+        }
+      ],
+      "title": "Evidently Covariate Drift Score (Info)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "description": "Fraction of user prediction requests flagged as out-of-distribution (OOD) relative to training feature bounds (Table 16 & SCRUM-22).",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green" },
+              { "color": "yellow", "value": 0.05 },
+              { "color": "red", "value": 0.15 }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "expr": "pv_user_ood_rate",
+          "legendFormat": "OOD Request Rate",
+          "refId": "A"
+        }
+      ],
+      "title": "User Traffic Out-of-Distribution Rate",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "id": 101,
+      "panels": [],
+      "title": "Layer 4 (Model): Daily nMAE, Error Attribution (e_model vs e_forecast) & Feature Drift (Section 4.7.3 – 4.7.5)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "description": "Tracks daily nMAE across all 31 arrays, the 25 training arrays, and the 6 held-out cold-start arrays. Retraining triggers if nMAE exceeds threshold for 3 consecutive days.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "nMAE (Normalized by kWp)",
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 7 },
+      "id": 5,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "expr": "pv_model_nmae{cohort=\"all\"}",
+          "legendFormat": "All Arrays (31)",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "expr": "pv_model_nmae{cohort=\"train_25\"}",
+          "legendFormat": "Training Arrays (25)",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "expr": "pv_model_nmae{cohort=\"held_out_6\"}",
+          "legendFormat": "Held-Out Cold-Start Arrays (6)",
+          "refId": "C"
+        }
+      ],
+      "title": "Daily nMAE: Fleet vs. 6 Held-Out Reference Arrays",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "description": "Separates total prediction error into Model Error (e_model, fixable by retraining) and Weather Forecast Error (e_forecast, Open-Meteo deviation from observed station weather) per Section 4.7.4.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "Error (kWh / kWp)",
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2
+          },
+          "unit": "kwatth"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 7 },
+      "id": 6,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "expr": "pv_error_attribution_kwh{source=\"e_model\"}",
+          "legendFormat": "e_model (Model Mapping Error — Drives Retrain)",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "expr": "pv_error_attribution_kwh{source=\"e_forecast\"}",
+          "legendFormat": "e_forecast (Open-Meteo Weather Error — Upstream)",
+          "refId": "B"
+        }
+      ],
+      "title": "Error Attribution: e_model vs. e_forecast (Section 4.7.4)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "description": "Per-feature PSI and Kolmogorov-Smirnov drift scores computed daily at 04:00 by the Evidently job (solar-drift) against the rolling reference window.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "Drift Score (PSI / KS)",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 7 },
+      "id": 7,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "expr": "drift_score{site=\"dkasc\"}",
+          "legendFormat": "{{feature}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Feature-Level Drift Scores (drift_score{feature, site})",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "id": 102,
+      "panels": [],
+      "title": "Layer 3 (Data Quality): Ingestion Schema Checks, Physical QC Flags & Batch Job Status (Table 13, 15, 17, 18)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "description": "Tracks 5-minute QC flags (missing, negative, over_kwp, stuck, day_zero — flagged, not deleted per Table 13) and critical schema violations (Table 18).",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "Flagged Records Count",
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": { "group": "A", "mode": "normal" }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 8,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "expr": "pv_ingestion_schema_violations_total",
+          "legendFormat": "CRITICAL: Schema / Night-Irradiance Violation",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "expr": "pv_ingestion_range_flags_total",
+          "legendFormat": "QC Flag: {{flag_type}} (Flagged, Retained)",
+          "refId": "B"
+        }
+      ],
+      "title": "Data Quality: Schema Violations & 5-Min Physical QC Flags (Table 13 & 18)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "description": "Execution duration and status of the 4 scheduled ECS Fargate MLOps jobs orchestrated by EventBridge & Step Functions: solar-ingest (01:00), solar-evaluate (03:00), solar-drift (04:00), solar-retrain (Weekly).",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "Duration (seconds)",
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 9,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "expr": "pv_job_duration_seconds{job=~\"solar-ingest|solar-evaluate|solar-drift|solar-retrain\"}",
+          "legendFormat": "{{job}} Duration",
+          "refId": "A"
+        }
+      ],
+      "title": "Scheduled MLOps Batch Jobs Duration (Table 15 & Step Functions)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 },
+      "id": 103,
+      "panels": [],
+      "title": "Layer 1 & 2 (Infrastructure & Service): FastAPI Latency, Error Rate & ECS Fargate Container Insights (Table 17 & 20)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "description": "FastAPI (solar-api) p50, p95, and p99 prediction serving latency (Layer 2 Service Monitoring, Table 17).",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "Latency (seconds)",
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 25 },
+      "id": 10,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service=\"solar-api\"}[5m])) by (le))",
+          "legendFormat": "p95 Latency (solar-api)",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{service=\"solar-api\"}[5m])) by (le))",
+          "legendFormat": "p50 Median Latency (solar-api)",
+          "refId": "B"
+        }
+      ],
+      "title": "Service Layer: FastAPI (solar-api) p95 & p50 Latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "description": "HTTP request throughput and 4xx/5xx error rate on the FastAPI prediction service behind the public ALB.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "Requests / sec",
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 25 },
+      "id": 11,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "expr": "sum(rate(http_requests_total{service=\"solar-api\",status=~\"2..\"}[5m]))",
+          "legendFormat": "2xx OK (Forecast Served)",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "expr": "sum(rate(http_requests_total{service=\"solar-api\",status=~\"4..\"}[5m]))",
+          "legendFormat": "4xx Client Validation Error",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "expr": "sum(rate(http_requests_total{service=\"solar-api\",status=~\"5..\"}[5m]))",
+          "legendFormat": "5xx Server Error",
+          "refId": "C"
+        }
+      ],
+      "title": "Service Layer: FastAPI Request Rate & HTTP Error Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "description": "ECS Fargate CPU and Memory utilization across solar-api (0.5 vCPU/1GB), mlflow-server (0.5 vCPU/1GB), solar-drift (1 vCPU/2GB), and solar-retrain (2 vCPU/4GB) per Table 17 & Table 20.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "Utilization (%)",
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 25 },
+      "id": 12,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "expr": "aws_ecs_cpuutilization_average{ClusterName=\"pv-forecasting-cluster\"}",
+          "legendFormat": "CPU % ({{ServiceName}})",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "expr": "aws_ecs_memory_utilization_average{ClusterName=\"pv-forecasting-cluster\"}",
+          "legendFormat": "Memory % ({{ServiceName}})",
+          "refId": "B"
+        }
+      ],
+      "title": "Infrastructure Layer: ECS Fargate CPU & Memory Utilization (Table 17 & 20)",
+      "type": "timeseries"
     }
-  ]
+  ],
+  "refresh": "30s",
+  "schemaVersion": 42,
+  "tags": ["cos40007", "mlops", "pv-forecasting", "solar", "evidently"],
+  "templating": { "list": [] },
+  "time": { "from": "now-7d", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "COS40007 PV Forecasting — MLOps & DevOps Multi-Layer Monitoring",
+  "uid": "pv-forecasting-mlops"
 }
