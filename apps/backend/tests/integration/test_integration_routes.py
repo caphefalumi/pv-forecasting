@@ -18,8 +18,10 @@ def client():
 
 
 def test_health_endpoint(client):
-    resp = client.get("/health")
+    resp = client.get("/health", headers={"X-Request-ID": "req-health-123"})
     assert resp.status_code == 200
+    assert resp.headers.get("X-Request-ID") == "req-health-123"
+    assert "X-Process-Time-Ms" in resp.headers
     data = resp.json()
     assert data["status"] == "ok"
     assert data["model_loaded"] is True
@@ -59,10 +61,26 @@ def test_forecast_endpoint_full_day_ahead_flow(client):
     assert data["predict_date"] == "2026-10-18"
     assert data["target_date"] == "2026-10-19"
     assert data["kwp"] == 15.0
+    assert data["is_ood"] is False
     assert data["total_daily_kwh"] > 0
     assert len(data["hourly_breakdown"]) == 24
     assert data["daytime_hours_count"] == 13
     assert data["peak_kwh"] > 0
+
+
+def test_forecast_endpoint_flags_ood_inputs(client):
+    payload = {
+        "kwp": 250.0,
+        "technology": "mono-Si",
+        "tracking": "fixed",
+        "tilt_deg": 60.0,
+        "surface_azimuth_pvlib": 0.0,
+        "predict_date": "2026-10-18",
+    }
+    resp = client.post("/api/v1/forecast", json=payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["is_ood"] is True
 
 
 def test_forecast_endpoint_validation_errors_produce_422(client):

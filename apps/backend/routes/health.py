@@ -51,7 +51,7 @@ async def telemetry_endpoints():
 async def root():
     return {
         "service": "pv-forecasting-api",
-        "description": "PV Energy Prediction FastAPI Service (Sprint 2)",
+        "description": "PV Energy Prediction FastAPI Service",
         "model_version": model_manager.model_version,
         "docs": "/docs",
     }

@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { createServerFn } from '@tanstack/react-start'
 import {
   Sun,
   Zap,
@@ -12,57 +11,17 @@ import {
   Clock,
   TrendingUp,
 } from 'lucide-react'
+import { getForecastServerFn } from '../lib/api-client'
 import {
-  type HourlyPoint,
+  type ForecastResponse,
   calculateSpecificYield,
   isDaytimeHour,
   validateArrayParameters,
 } from '../lib/forecast-utils'
 
-// Server Function: calls backend FastAPI service running locally or on AWS ALB
-const getForecastServerFn = createServerFn({ method: 'POST' })
-  .validator((data: {
-    kwp: number
-    technology: string
-    tracking: string
-    tilt_deg: number
-    surface_azimuth_pvlib: number
-    predict_date?: string
-  }) => data)
-  .handler(async ({ data }) => {
-    const backendUrl = process.env.BACKEND_API_URL || 'http://127.0.0.1:8000'
-    try {
-      const res = await fetch(`${backendUrl}/api/v1/forecast`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`API error ${res.status}: ${text}`)
-      }
-      return await res.json()
-    } catch (err: any) {
-      console.error('Failed to contact backend:', err)
-      throw new Error(err.message || 'Unable to connect to FastAPI forecasting backend')
-    }
-  })
-
 export const Route = createFileRoute('/')({
   component: PVForecastPage,
 })
-
-interface ForecastResult {
-  predict_date: string
-  target_date: string
-  kwp: number
-  total_daily_kwh: number
-  peak_hour: string
-  peak_kwh: number
-  daytime_hours_count: number
-  model_version: string
-  hourly_breakdown: HourlyPoint[]
-}
 
 function PVForecastPage() {
   const [kwp, setKwp] = useState<number>(10.0)
@@ -76,7 +35,7 @@ function PVForecastPage() {
 
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<ForecastResult | null>(null)
+  const [result, setResult] = useState<ForecastResponse | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -104,8 +63,8 @@ function PVForecastPage() {
         data: payload,
       })
       setResult(data)
-    } catch (err: any) {
-      setError(err.message || 'Error executing forecast')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error executing forecast')
     } finally {
       setLoading(false)
     }
@@ -119,12 +78,12 @@ function PVForecastPage() {
       <section className="island-shell rise-in relative overflow-hidden rounded-[2rem] px-6 py-8 sm:px-10 sm:py-10">
         <div className="pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.2),transparent_66%)]" />
         <div className="pointer-events-none absolute -bottom-20 -right-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(59,130,246,0.15),transparent_66%)]" />
-        
+
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-700 dark:text-amber-300">
               <Sun className="h-3.5 w-3.5" />
-              COS40007 MLOps Platform — Sprint 2
+              COS40007 MLOps Platform — Day-Ahead PV Forecasting
             </div>
             <h1 className="mt-3 text-3xl font-bold tracking-tight text-[var(--sea-ink)] sm:text-5xl">
               Day-Ahead Solar Energy Forecast (D+1)
@@ -156,11 +115,15 @@ function PVForecastPage() {
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             {/* Capacity in kWp */}
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]">
+              <label
+                htmlFor="input-kwp"
+                className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]"
+              >
                 Rated Peak Capacity (kWp)
               </label>
               <div className="relative mt-1">
                 <input
+                  id="input-kwp"
                   type="number"
                   step="0.1"
                   min="0.5"
@@ -178,11 +141,15 @@ function PVForecastPage() {
 
             {/* Cell Technology */}
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]">
+              <label
+                htmlFor="select-technology"
+                className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]"
+              >
                 Cell Technology
               </label>
               <div className="relative mt-1">
                 <select
+                  id="select-technology"
                   value={technology}
                   onChange={(e) => setTechnology(e.target.value)}
                   className="w-full rounded-xl border border-[var(--line)] bg-[var(--header-bg)] px-4 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
@@ -200,11 +167,15 @@ function PVForecastPage() {
 
             {/* Tracking Type */}
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]">
+              <label
+                htmlFor="select-tracking"
+                className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]"
+              >
                 Tracking System
               </label>
               <div className="relative mt-1">
                 <select
+                  id="select-tracking"
                   value={tracking}
                   onChange={(e) => setTracking(e.target.value)}
                   className="w-full rounded-xl border border-[var(--line)] bg-[var(--header-bg)] px-4 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
@@ -219,10 +190,14 @@ function PVForecastPage() {
             {/* Tilt & Azimuth Grid */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]">
+                <label
+                  htmlFor="input-tilt"
+                  className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]"
+                >
                   Tilt Angle (°)
                 </label>
                 <input
+                  id="input-tilt"
                   type="number"
                   step="1"
                   min="0"
@@ -233,10 +208,14 @@ function PVForecastPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]">
+                <label
+                  htmlFor="input-azimuth"
+                  className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]"
+                >
                   Azimuth (°)
                 </label>
                 <input
+                  id="input-azimuth"
                   type="number"
                   step="1"
                   min="-180"
@@ -250,10 +229,14 @@ function PVForecastPage() {
 
             {/* Prediction Date */}
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]">
+              <label
+                htmlFor="input-predict-date"
+                className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]"
+              >
                 Request Date (Predicting Tomorrow D+1)
               </label>
               <input
+                id="input-predict-date"
                 type="date"
                 value={predictDate}
                 onChange={(e) => setPredictDate(e.target.value)}
@@ -281,7 +264,10 @@ function PVForecastPage() {
           </form>
 
           {error && (
-            <div className="mt-4 flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-600 dark:text-rose-400">
+            <div
+              role="alert"
+              className="mt-4 flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-600 dark:text-rose-400"
+            >
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>{error}</span>
             </div>
@@ -292,6 +278,15 @@ function PVForecastPage() {
         <section className="space-y-6 lg:col-span-8">
           {result ? (
             <>
+              {result.is_ood && (
+                <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-800 dark:text-amber-300">
+                  <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" />
+                  <span>
+                    <b>Out-of-Distribution (OOD) Input Flagged:</b> Array capacity or tilt angle falls outside the DKASC reference training range (1–100 kWp, 0°–45° tilt). Prediction is extrapolated via capacity normalization and logged for OOD monitoring.
+                  </span>
+                </div>
+              )}
+
               {/* KPI Cards */}
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <div className="island-shell rounded-2xl p-4">
@@ -462,7 +457,7 @@ function PVForecastPage() {
               <div className="flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-xs text-emerald-700 dark:text-emerald-300">
                 <span className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  Logged to Supabase `prediction_logs` for future nMAE drift evaluation.
+                  Logged to Supabase <code>prediction_logs</code> for future nMAE drift evaluation.
                 </span>
                 <span className="font-mono text-[11px] opacity-75">
                   Model: {result.model_version}

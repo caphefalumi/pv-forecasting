@@ -3,7 +3,10 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -16,49 +19,94 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "links": [],
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [
+        "cos40007"
+      ],
+      "targetBlank": false,
+      "title": "COS40007 Dashboards",
+      "type": "dashboards"
+    }
+  ],
   "panels": [
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
       "id": 200,
       "panels": [],
       "title": "Service & Infrastructure KPIs",
       "type": "row"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "description": "95th percentile HTTP response latency for FastAPI prediction requests (solar-api).",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 3,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green" },
-              { "color": "yellow", "value": 0.5 },
-              { "color": "red", "value": 1.5 }
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 1.5
+              }
             ]
           },
           "unit": "s"
         },
         "overrides": []
       },
-      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
       "id": 1,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service=\"solar-api\"}[5m])) by (le))",
           "legendFormat": "p95 Latency",
           "refId": "A"
@@ -68,34 +116,57 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "description": "Current HTTP request rate handled by the FastAPI service behind the public ALB.",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 2,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
-            "steps": [{ "color": "green" }]
+            "steps": [
+              {
+                "color": "green"
+              }
+            ]
           },
           "unit": "reqps"
         },
         "overrides": []
       },
-      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
       "id": 2,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "sum(rate(http_requests_total{service=\"solar-api\"}[5m]))",
           "legendFormat": "Total req/s",
           "refId": "A"
@@ -105,38 +176,65 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "description": "Percentage of 5xx HTTP server errors returned by solar-api.",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 2,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green" },
-              { "color": "yellow", "value": 0.01 },
-              { "color": "red", "value": 0.05 }
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 0.01
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
             ]
           },
           "unit": "percentunit"
         },
         "overrides": []
       },
-      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
       "id": 3,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "sum(rate(http_requests_total{service=\"solar-api\",status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_requests_total{service=\"solar-api\"}[5m])), 1e-9)",
           "legendFormat": "5xx Error Ratio",
           "refId": "A"
@@ -146,38 +244,65 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "description": "Average CPU utilization across the ECS Fargate cluster (pv-forecasting-cluster).",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 1,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green" },
-              { "color": "yellow", "value": 70 },
-              { "color": "red", "value": 85 }
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
             ]
           },
           "unit": "percent"
         },
         "overrides": []
       },
-      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
       "id": 4,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "avg(aws_ecs_cpuutilization_average{ClusterName=\"pv-forecasting-cluster\"})",
           "legendFormat": "Cluster CPU %",
           "refId": "A"
@@ -188,18 +313,28 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
       "id": 201,
       "panels": [],
       "title": "FastAPI Prediction Service (solar-api)",
       "type": "row"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "description": "FastAPI (solar-api) p50, p95, and p99 prediction serving latency.",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "axisLabel": "Latency (seconds)",
             "drawStyle": "line",
@@ -211,23 +346,37 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 7
+      },
       "id": 5,
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service=\"solar-api\"}[5m])) by (le))",
           "legendFormat": "p99 Latency (solar-api)",
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service=\"solar-api\"}[5m])) by (le))",
           "legendFormat": "p95 Latency (solar-api)",
           "refId": "B"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{service=\"solar-api\"}[5m])) by (le))",
           "legendFormat": "p50 Median Latency (solar-api)",
           "refId": "C"
@@ -237,11 +386,16 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "description": "HTTP request throughput and 2xx/4xx/5xx status code breakdown on the FastAPI prediction service behind the public ALB.",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "axisLabel": "Requests / sec",
             "drawStyle": "line",
@@ -253,23 +407,37 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 7
+      },
       "id": 6,
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "sum(rate(http_requests_total{service=\"solar-api\",status=~\"2..\"}[5m]))",
           "legendFormat": "2xx OK (Forecast Served)",
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "sum(rate(http_requests_total{service=\"solar-api\",status=~\"4..\"}[5m]))",
           "legendFormat": "4xx Client Validation Error",
           "refId": "B"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "sum(rate(http_requests_total{service=\"solar-api\",status=~\"5..\"}[5m]))",
           "legendFormat": "5xx Server Error",
           "refId": "C"
@@ -280,18 +448,28 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
       "id": 202,
       "panels": [],
       "title": "ECS Fargate Container Resources (CloudWatch Container Insights)",
       "type": "row"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "description": "ECS Fargate CPU utilization across solar-api (0.5 vCPU), mlflow-server (0.5 vCPU), solar-drift (1 vCPU), and solar-retrain (2 vCPU).",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "axisLabel": "CPU Utilization (%)",
             "drawStyle": "line",
@@ -303,11 +481,19 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
       "id": 7,
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "aws_ecs_cpuutilization_average{ClusterName=\"pv-forecasting-cluster\"}",
           "legendFormat": "CPU % — {{ServiceName}}",
           "refId": "A"
@@ -317,11 +503,16 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "description": "ECS Fargate Memory utilization across solar-api (1 GB), mlflow-server (1 GB), solar-drift (2 GB), and solar-retrain (4 GB).",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "axisLabel": "Memory Utilization (%)",
             "drawStyle": "line",
@@ -333,11 +524,19 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
       "id": 8,
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "aws_ecs_memory_utilization_average{ClusterName=\"pv-forecasting-cluster\"}",
           "legendFormat": "Memory % — {{ServiceName}}",
           "refId": "B"
@@ -345,13 +544,75 @@
       ],
       "title": "ECS Fargate Memory Utilization by Service",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 27
+      },
+      "id": 203,
+      "panels": [],
+      "title": "Structured Application & Prediction Audit Logs (Grafana Cloud Loki)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "grafanacloud-logs"
+      },
+      "description": "Live structured JSON events pushed by FastAPI (solar-api) via push_log_to_loki(), including target_date, kwp, total_daily_kwh, model_version, and is_ood flag.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "id": 9,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "grafanacloud-logs"
+          },
+          "editorMode": "code",
+          "expr": "{service=\"solar-api\"} |= \"\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "FastAPI (solar-api) Structured Prediction Logs",
+      "type": "logs"
     }
   ],
   "refresh": "30s",
   "schemaVersion": 42,
-  "tags": ["cos40007", "devops", "pv-forecasting", "ecs", "fastapi"],
-  "templating": { "list": [] },
-  "time": { "from": "now-7d", "to": "now" },
+  "tags": [
+    "cos40007",
+    "devops",
+    "pv-forecasting",
+    "ecs",
+    "fastapi"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "browser",
   "title": "PV Forecasting — Service & Infrastructure Monitoring",

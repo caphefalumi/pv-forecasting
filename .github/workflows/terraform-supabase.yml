@@ -1,4 +1,4 @@
-name: Terraform Supabase Stack
+name: Terraform Supabase Infrastructure
 
 on:
   push:
@@ -7,10 +7,11 @@ on:
       - master
     paths:
       - "infra/terraform/supabase/**"
-      - ".github/workflows/terraform_supabase.yml"
+      - ".github/workflows/terraform-supabase.yml"
   pull_request:
     paths:
       - "infra/terraform/supabase/**"
+      - ".github/workflows/terraform-supabase.yml"
   workflow_dispatch:
 
 permissions:

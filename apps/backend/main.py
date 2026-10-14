@@ -1,8 +1,10 @@
 import logging
 import time
+import uuid
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from config import settings
 from routes.health import router as health_router
@@ -16,6 +18,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger("pv-backend")
 
+OPENAPI_TAGS = [
+    {
+        "name": "health",
+        "description": "Service readiness, Prometheus metrics, and telemetry endpoint inspection.",
+    },
+    {
+        "name": "forecast",
+        "description": "Day-ahead (D+1) 24-hour PV energy forecasting and zero-downtime model management.",
+    },
+]
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -28,8 +41,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="PV Forecasting API",
-    description="Day-Ahead Solar Energy Prediction Service (Sprint 2 ECS Fargate)",
+    description="Day-Ahead Solar Energy Prediction Service",
     version="1.0.0",
+    openapi_tags=OPENAPI_TAGS,
     lifespan=lifespan,
 )
 
@@ -44,13 +58,35 @@ app.add_middleware(
 
 
 @app.middleware("http")
-async def prometheus_telemetry_middleware(request: Request, call_next):
+async def observability_and_correlation_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    request.state.request_id = request_id
     start_time = time.perf_counter()
+
     response = await call_next(request)
+
     duration = time.perf_counter() - start_time
     if request.url.path != "/metrics":
         telemetry_store.record_http_request(response.status_code, duration)
+
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Process-Time-Ms"] = f"{duration * 1000.0:.2f}"
     return response
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
+    logger.error("Unhandled exception [request_id=%s]: %s", request_id, exc, exc_info=True)
+    telemetry_store.record_http_request(500, 0.0)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error",
+            "request_id": request_id,
+        },
+        headers={"X-Request-ID": request_id},
+    )
 
 # Mount routes
 app.include_router(health_router)

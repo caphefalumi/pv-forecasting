@@ -1,5 +1,6 @@
 import {
   HeadContent,
+  Link,
   Scripts,
   createRootRouteWithContext,
 } from '@tanstack/react-router'
@@ -31,7 +32,12 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         content: 'width=device-width, initial-scale=1',
       },
       {
-        title: 'TanStack Start Starter',
+        title: 'PV Solar Forecast (D+1) — COS40007 MLOps Platform',
+      },
+      {
+        name: 'description',
+        content:
+          'Day-ahead 24-hour photovoltaic solar energy forecasting powered by PyTorch LSTM, Open-Meteo NWP, and MLflow Model Registry.',
       },
     ],
     links: [
@@ -41,8 +47,31 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       },
     ],
   }),
+  notFoundComponent: NotFoundPage,
   shellComponent: RootDocument,
 })
+
+function NotFoundPage() {
+  return (
+    <main className="page-wrap px-4 py-16">
+      <section className="island-shell mx-auto max-w-xl rounded-2xl p-8 text-center">
+        <p className="island-kicker mb-2">404</p>
+        <h1 className="text-2xl font-bold text-[var(--sea-ink)] sm:text-3xl">
+          Page Not Found
+        </h1>
+        <p className="mt-2 text-sm text-[var(--sea-ink-soft)]">
+          The requested page does not exist on the PV Solar Forecasting portal.
+        </p>
+        <Link
+          to="/"
+          className="mt-6 inline-flex items-center justify-center rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white no-underline shadow transition hover:bg-amber-600"
+        >
+          Return to Forecast Dashboard
+        </Link>
+      </section>
+    </main>
+  )
+}
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (

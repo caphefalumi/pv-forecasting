@@ -45,6 +45,7 @@ async def create_forecast(request: ForecastRequest, background_tasks: Background
     # 4. Track Out-of-Distribution (OOD) user traffic & log to Supabase + Loki
     user_dict = request.model_dump()
     is_ood = telemetry_store.check_and_record_ood(user_dict)
+    result["is_ood"] = is_ood
     result["inputs"] = {**user_dict, "is_ood": is_ood}
     result["weather_forecast"] = weather_hourly
     background_tasks.add_task(log_prediction_to_supabase, result)

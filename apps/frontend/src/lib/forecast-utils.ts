@@ -19,6 +19,21 @@ export interface ArrayParameters {
   predict_date?: string
 }
 
+export interface ForecastResponse {
+  predict_date: string
+  target_date: string
+  kwp: number
+  total_daily_kwh: number
+  peak_hour: string
+  peak_kwh: float | number
+  daytime_hours_count: number
+  model_version: string
+  is_ood?: boolean
+  hourly_breakdown: HourlyPoint[]
+}
+
+type float = number
+
 export const VALID_TECHNOLOGIES = [
   'mono-Si',
   'poly-Si',
@@ -130,4 +145,17 @@ export function sumDailyKwh(hourlyBreakdown: HourlyPoint[]): number {
   if (!hourlyBreakdown || hourlyBreakdown.length === 0) return 0
   const sum = hourlyBreakdown.reduce((acc, curr) => acc + (curr.kwh || 0), 0)
   return Number(sum.toFixed(2))
+}
+
+/**
+ * Formats HTTP API status codes and detail messages into user-friendly error strings.
+ */
+export function formatApiError(status: number, detail: string): string {
+  if (status === 422) {
+    return `Validation Error: Please check your input parameters (${detail})`
+  }
+  if (status === 400) {
+    return `Bad Request: ${detail}`
+  }
+  return 'Unexpected error occurred while communicating with forecasting service.'
 }

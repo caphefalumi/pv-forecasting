@@ -103,8 +103,9 @@ ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbook.yml \
 
 ## 5. CI/CD Workflows
 
-The repository includes 4 GitHub Actions workflows:
-1. `.github/workflows/ci.yml`: Integration tests (`pytest`), frontend build (`bun run build`), and Terraform format/validation checks.
-2. `.github/workflows/deploy_backend.yml`: Builds Docker image, pushes to ECR, triggers rolling ECS deployment, and runs post-deployment smoke tests against the ALB DNS.
-3. `.github/workflows/terraform_aws.yml`: Plans and applies AWS infrastructure using GitHub Actions OIDC and Supabase remote state.
-4. `.github/workflows/terraform_supabase.yml`: Plans and applies Supabase project and API configurations.
+The repository includes 5 GitHub Actions workflows:
+1. `.github/workflows/ci.yml`: Unit & integration tests (`pytest` and `bun:test`), frontend build (`bun run build`), Ansible playbook check, and Terraform format/validation checks.
+2. `.github/workflows/deploy-backend.yml`: Builds multi-stage Docker image, pushes to ECR, triggers rolling ECS deployment, and runs post-deployment smoke tests against the ALB DNS.
+3. `.github/workflows/promote-model.yml`: Promotes a verified Challenger model version to the `@champion` alias in the MLflow Registry with approver provenance and Discord notification.
+4. `.github/workflows/terraform-aws.yml`: Plans and applies AWS infrastructure using GitHub Actions OIDC and Supabase remote state.
+5. `.github/workflows/terraform-supabase.yml`: Plans and applies Supabase project and API configurations.

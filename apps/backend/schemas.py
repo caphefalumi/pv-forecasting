@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TechnologyType(str, Enum):
@@ -20,6 +20,19 @@ class TrackingType(str, Enum):
 
 
 class ForecastRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "kwp": 10.0,
+                "technology": "mono-Si",
+                "tracking": "fixed",
+                "tilt_deg": 20.0,
+                "surface_azimuth_pvlib": 0.0,
+                "predict_date": "2026-10-18",
+            }
+        }
+    )
+
     kwp: float = Field(default=10.0, gt=0, description="Installed DC capacity in kWp")
     technology: TechnologyType = Field(default=TechnologyType.MONO_SI, description="PV cell technology")
     tracking: TrackingType = Field(default=TrackingType.FIXED, description="Tracking system type")
@@ -46,6 +59,7 @@ class ForecastResponse(BaseModel):
     peak_kwh: float
     daytime_hours_count: int
     model_version: str
+    is_ood: bool = Field(default=False, description="True if array parameters fall outside the DKASC training distribution")
     hourly_breakdown: List[HourlyPoint]
 
 

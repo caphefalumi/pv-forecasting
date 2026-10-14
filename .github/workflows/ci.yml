@@ -1,4 +1,4 @@
-name: CI Pipeline (Integration & Build Checks)
+name: CI Pipeline
 
 on:
   push:

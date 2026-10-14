@@ -101,6 +101,20 @@ def check_terraform_modules():
         else:
             print_fail(f"Missing Table 20 entrypoint {job_path}")
 
+    for wf in ["ci.yml", "deploy-backend.yml", "promote-model.yml", "terraform-aws.yml", "terraform-supabase.yml"]:
+        wf_path = ROOT_DIR / ".github" / "workflows" / wf
+        if wf_path.exists():
+            print_pass(f"GitHub Actions workflow '.github/workflows/{wf}' present")
+        else:
+            print_fail(f"Missing GitHub Actions workflow {wf_path}")
+
+    for doc in ["architecture.md", "api-contract.md", "data-pipeline.md", "deployment-and-monitoring.md", "mlops-lifecycle.md"]:
+        doc_path = ROOT_DIR / "docs" / doc
+        if doc_path.exists():
+            print_pass(f"Documentation 'docs/{doc}' present")
+        else:
+            print_fail(f"Missing documentation file {doc_path}")
+
 
 def check_api_endpoints():
     print_step("Step 4: Smoke Test Live API Endpoints")

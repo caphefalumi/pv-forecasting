@@ -1,4 +1,4 @@
-name: Terraform AWS Infrastructure Stack
+name: Terraform AWS Infrastructure
 
 on:
   push:
@@ -8,12 +8,12 @@ on:
     paths:
       - "infra/terraform/**"
       - "!infra/terraform/supabase/**"
-      - ".github/workflows/terraform_aws.yml"
+      - ".github/workflows/terraform-aws.yml"
   pull_request:
     paths:
       - "infra/terraform/**"
       - "!infra/terraform/supabase/**"
-      - ".github/workflows/terraform_aws.yml"
+      - ".github/workflows/terraform-aws.yml"
   workflow_dispatch:
 
 permissions:

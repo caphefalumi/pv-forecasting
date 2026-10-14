@@ -3,14 +3,9 @@
   "mode": "file-router",
   "typescript": true,
   "packageManager": "bun",
-  "includeExamples": true,
+  "includeExamples": false,
   "tailwind": true,
   "projectPreset": "default",
-  "addOnOptions": {
-    "prisma": {
-      "database": "sqlite"
-    }
-  },
   "git": false,
   "install": true,
   "intent": true,
@@ -19,8 +14,6 @@
   "framework": "react",
   "chosenAddOns": [
     "vercel",
-    "db",
-    "prisma",
     "tanstack-query"
   ]
 }

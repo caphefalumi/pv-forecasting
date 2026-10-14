@@ -117,7 +117,7 @@ code/
 ├── Dockerfile, .dockerignore
 ├── requirements.txt
 ├── README.md
-└── docs/DATA_PIPELINE.md       this file
+└── docs/data-pipeline.md       this file
 ```
 
 ### 3.3 Data folder (never committed, except three small metadata files)

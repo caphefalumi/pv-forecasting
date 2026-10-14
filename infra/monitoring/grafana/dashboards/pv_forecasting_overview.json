@@ -3,7 +3,10 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -16,49 +19,94 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "links": [],
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [
+        "cos40007"
+      ],
+      "targetBlank": false,
+      "title": "COS40007 Dashboards",
+      "type": "dashboards"
+    }
+  ],
   "panels": [
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
       "id": 100,
       "panels": [],
       "title": "Executive KPIs — Model Accuracy, Cold-Start, Drift & OOD Traffic",
       "type": "row"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "description": "Normalised Mean Absolute Error (nMAE) across all 31 DKASC reference arrays. Alert triggers if > threshold for 3 consecutive days.",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 3,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green" },
-              { "color": "yellow", "value": 0.08 },
-              { "color": "red", "value": 0.12 }
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 0.08
+              },
+              {
+                "color": "red",
+                "value": 0.12
+              }
             ]
           },
           "unit": "percentunit"
         },
         "overrides": []
       },
-      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
       "id": 1,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "pv_model_nmae{cohort=\"all\"}",
           "legendFormat": "Fleet nMAE (All 31 Arrays)",
           "refId": "A"
@@ -68,38 +116,65 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "description": "nMAE on the 6 held-out reference arrays never seen during training (east/west panels, 3 cell technologies). Estimates cold-start error for new user arrays.",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 3,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green" },
-              { "color": "yellow", "value": 0.09 },
-              { "color": "red", "value": 0.14 }
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 0.09
+              },
+              {
+                "color": "red",
+                "value": 0.14
+              }
             ]
           },
           "unit": "percentunit"
         },
         "overrides": []
       },
-      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
       "id": 2,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "pv_model_nmae{cohort=\"held_out_6\"}",
           "legendFormat": "Held-Out 6 Arrays nMAE",
           "refId": "A"
@@ -109,38 +184,65 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "description": "Evidently covariate drift score (PSI / KS test). Diagnostic only — seasonal weather shifts do not trigger retraining on their own.",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 3,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "blue" },
-              { "color": "yellow", "value": 0.2 },
-              { "color": "orange", "value": 0.35 }
+              {
+                "color": "blue"
+              },
+              {
+                "color": "yellow",
+                "value": 0.2
+              },
+              {
+                "color": "orange",
+                "value": 0.35
+              }
             ]
           },
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
       "id": 3,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "avg(drift_score{site=\"dkasc\"})",
           "legendFormat": "Mean Feature Drift Score",
           "refId": "A"
@@ -150,38 +252,65 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "description": "Fraction of user prediction requests flagged as out-of-distribution (OOD) relative to training feature bounds.",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 2,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green" },
-              { "color": "yellow", "value": 0.05 },
-              { "color": "red", "value": 0.15 }
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 0.05
+              },
+              {
+                "color": "red",
+                "value": 0.15
+              }
             ]
           },
           "unit": "percentunit"
         },
         "overrides": []
       },
-      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
       "id": 4,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "pv_user_ood_rate",
           "legendFormat": "OOD Request Rate",
           "refId": "A"
@@ -192,18 +321,28 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
       "id": 101,
       "panels": [],
       "title": "Model Accuracy, Error Attribution & Feature Drift",
       "type": "row"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "description": "Tracks daily nMAE across all 31 arrays, the 25 training arrays, and the 6 held-out cold-start arrays. Retraining triggers if nMAE exceeds threshold for 3 consecutive days.",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "axisLabel": "nMAE (Normalized by kWp)",
             "drawStyle": "line",
@@ -215,23 +354,37 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 7 },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 7
+      },
       "id": 5,
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "pv_model_nmae{cohort=\"all\"}",
           "legendFormat": "All Arrays (31)",
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "pv_model_nmae{cohort=\"train_25\"}",
           "legendFormat": "Training Arrays (25)",
           "refId": "B"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "pv_model_nmae{cohort=\"held_out_6\"}",
           "legendFormat": "Held-Out Cold-Start Arrays (6)",
           "refId": "C"
@@ -241,11 +394,16 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "description": "Separates total prediction error into Model Error (e_model, fixable by retraining) and Weather Forecast Error (e_forecast, Open-Meteo deviation from observed station weather).",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "axisLabel": "Error (kWh / kWp)",
             "drawStyle": "line",
@@ -257,17 +415,28 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 7 },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 7
+      },
       "id": 6,
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "pv_error_attribution_kwh{source=\"e_model\"}",
           "legendFormat": "e_model (Model Mapping Error — Drives Retrain)",
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "pv_error_attribution_kwh{source=\"e_forecast\"}",
           "legendFormat": "e_forecast (Open-Meteo Weather Error — Upstream)",
           "refId": "B"
@@ -277,11 +446,16 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "description": "Per-feature PSI and Kolmogorov-Smirnov drift scores computed daily at 04:00 by the Evidently job (solar-drift) against the rolling reference window.",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "axisLabel": "Drift Score (PSI / KS)",
             "drawStyle": "line",
@@ -293,11 +467,19 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 7 },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 7
+      },
       "id": 7,
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "drift_score{site=\"dkasc\"}",
           "legendFormat": "{{feature}}",
           "refId": "A"
@@ -308,39 +490,63 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
       "id": 102,
       "panels": [],
       "title": "Data Quality & Scheduled MLOps Jobs",
       "type": "row"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "description": "Tracks 5-minute QC flags (missing, negative, over_kwp, stuck, day_zero — flagged, not deleted) and critical schema violations.",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "axisLabel": "Flagged Records Count",
             "drawStyle": "bars",
             "fillOpacity": 80,
-            "stacking": { "group": "A", "mode": "normal" }
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            }
           },
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
       "id": 8,
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "pv_ingestion_schema_violations_total",
           "legendFormat": "CRITICAL: Schema / Night-Irradiance Violation",
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "pv_ingestion_range_flags_total",
           "legendFormat": "QC Flag: {{flag_type}} (Flagged, Retained)",
           "refId": "B"
@@ -350,11 +556,16 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "description": "Execution duration of the 4 scheduled ECS Fargate MLOps jobs orchestrated by EventBridge & Step Functions: solar-ingest (01:00), solar-evaluate (03:00), solar-drift (04:00), solar-retrain (Weekly).",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "axisLabel": "Duration (seconds)",
             "drawStyle": "line",
@@ -366,11 +577,19 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
       "id": 9,
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "grafanacloud-prom" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
           "expr": "pv_job_duration_seconds{job=~\"solar-ingest|solar-evaluate|solar-drift|solar-retrain\"}",
           "legendFormat": "{{job}} Duration",
           "refId": "A"
@@ -382,9 +601,20 @@
   ],
   "refresh": "30s",
   "schemaVersion": 42,
-  "tags": ["cos40007", "mlops", "pv-forecasting", "model", "data-quality"],
-  "templating": { "list": [] },
-  "time": { "from": "now-7d", "to": "now" },
+  "tags": [
+    "cos40007",
+    "mlops",
+    "pv-forecasting",
+    "model",
+    "data-quality"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "browser",
   "title": "PV Forecasting — Model & Data Quality Monitoring",
