@@ -1,12 +1,14 @@
 import logging
+import time
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
 from routes.health import router as health_router
 from routes.forecast import router as forecast_router
 from services.model_service import model_manager
+from services.telemetry import telemetry_store
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,6 +41,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def prometheus_telemetry_middleware(request: Request, call_next):
+    start_time = time.perf_counter()
+    response = await call_next(request)
+    duration = time.perf_counter() - start_time
+    if request.url.path != "/metrics":
+        telemetry_store.record_http_request(response.status_code, duration)
+    return response
 
 # Mount routes
 app.include_router(health_router)

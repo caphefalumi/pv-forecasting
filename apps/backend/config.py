@@ -36,5 +36,15 @@ class Settings(BaseSettings):
     SITE_LONGITUDE: float = 133.8754
     SITE_TZ: str = "Australia/Darwin"
 
+    # Grafana Cloud Raw Telemetry Endpoints (slimgodwit2228 — prod-ap-southeast-1)
+    GRAFANA_PROMETHEUS_URL: str = "https://prometheus-prod-37-prod-ap-southeast-1.grafana.net/api/prom"
+    GRAFANA_PROMETHEUS_USER: str = "3616746"
+    GRAFANA_LOKI_URL: str = "https://logs-prod-020.grafana.net/loki/api/v1/push"
+    GRAFANA_LOKI_USER: str = "1804041"
+    GRAFANA_TEMPO_URL: str = "https://tempo-prod-14-prod-ap-southeast-1.grafana.net/tempo"
+    GRAFANA_TEMPO_USER: str = "1798340"
+    GRAFANA_OTLP_ENDPOINT: str = "https://otlp-gateway-prod-ap-southeast-1.grafana.net/otlp"
+    GRAFANA_CLOUD_API_KEY: str = ""
+
 
 settings = Settings()

@@ -55,7 +55,14 @@ resource "aws_ecs_task_definition" "fastapi" {
         { name = "SUPABASE_URL", value = var.supabase_url },
         { name = "SUPABASE_SERVICE_ROLE_KEY", value = var.supabase_service_role_key },
         { name = "SUPABASE_RAW_DATA_BUCKET", value = "processed_data" },
-        { name = "MLFLOW_TRACKING_URI", value = var.mlflow_tracking_uri }
+        { name = "MLFLOW_TRACKING_URI", value = var.mlflow_tracking_uri },
+        { name = "GRAFANA_PROMETHEUS_URL", value = "https://prometheus-prod-37-prod-ap-southeast-1.grafana.net/api/prom" },
+        { name = "GRAFANA_PROMETHEUS_USER", value = "3616746" },
+        { name = "GRAFANA_LOKI_URL", value = "https://logs-prod-020.grafana.net/loki/api/v1/push" },
+        { name = "GRAFANA_LOKI_USER", value = "1804041" },
+        { name = "GRAFANA_TEMPO_URL", value = "https://tempo-prod-14-prod-ap-southeast-1.grafana.net/tempo" },
+        { name = "GRAFANA_TEMPO_USER", value = "1798340" },
+        { name = "GRAFANA_OTLP_ENDPOINT", value = "https://otlp-gateway-prod-ap-southeast-1.grafana.net/otlp" }
       ]
 
       logConfiguration = {

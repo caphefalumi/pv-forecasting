@@ -87,3 +87,30 @@ def test_forecast_endpoint_invalid_date_produces_400(client):
     resp = client.post("/api/v1/forecast", json=payload)
     assert resp.status_code == 400
     assert "Invalid predict_date format" in resp.json()["detail"]
+
+
+def test_prometheus_metrics_endpoint_matches_grafana_dashboards(client):
+    resp = client.get("/metrics")
+    assert resp.status_code == 200
+    text = resp.text
+    assert 'http_requests_total{service="solar-api"' in text
+    assert 'http_request_duration_seconds_bucket{service="solar-api"' in text
+    assert "pv_user_ood_rate" in text
+    assert 'pv_model_nmae{cohort="all"}' in text
+    assert 'pv_model_nmae{cohort="held_out_6"}' in text
+    assert 'pv_error_attribution_kwh{source="e_model"}' in text
+    assert 'drift_score{site="dkasc"' in text
+    assert "pv_ingestion_schema_violations_total" in text
+    assert "pv_job_duration_seconds" in text
+
+
+def test_telemetry_raw_endpoints_config(client):
+    resp = client.get("/api/v1/telemetry/endpoints")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["prometheus"]["user"] == "3616746"
+    assert "prometheus-prod-37-prod-ap-southeast-1.grafana.net" in data["prometheus"]["url"]
+    assert data["loki"]["user"] == "1804041"
+    assert "logs-prod-020.grafana.net" in data["loki"]["url"]
+    assert data["tempo"]["user"] == "1798340"
+    assert "tempo-prod-14-prod-ap-southeast-1.grafana.net" in data["tempo"]["url"]

@@ -6,6 +6,7 @@ from schemas import ForecastRequest, ForecastResponse
 from services.model_service import model_manager
 from services.weather_service import fetch_open_meteo_day_ahead
 from services.supabase_service import log_prediction_to_supabase
+from services.telemetry import telemetry_store, push_log_to_loki
 
 router = APIRouter(prefix="/api/v1", tags=["forecast"])
 
@@ -41,10 +42,23 @@ async def create_forecast(request: ForecastRequest, background_tasks: Background
         predict_date_str=predict_date_str,
     )
 
-    # 4. Asynchronously log prediction to Supabase for Sprint 1 eval jobs
-    result["inputs"] = request.model_dump()
+    # 4. Track Out-of-Distribution (OOD) user traffic & log to Supabase + Loki
+    user_dict = request.model_dump()
+    is_ood = telemetry_store.check_and_record_ood(user_dict)
+    result["inputs"] = {**user_dict, "is_ood": is_ood}
     result["weather_forecast"] = weather_hourly
     background_tasks.add_task(log_prediction_to_supabase, result)
+    background_tasks.add_task(
+        push_log_to_loki,
+        "forecast_served",
+        {
+            "target_date": target_date_str,
+            "kwp": request.kwp,
+            "total_daily_kwh": result["total_daily_kwh"],
+            "model_version": result["model_version"],
+            "is_ood": is_ood,
+        },
+    )
 
     return ForecastResponse(**result)
 
