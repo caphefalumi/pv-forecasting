@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
+import { useForm, type AnyFieldApi } from '@tanstack/react-form'
 import {
   Sun,
   Zap,
@@ -13,7 +14,10 @@ import {
 } from 'lucide-react'
 import { getForecastServerFn } from '../lib/api-client'
 import {
+  type ArrayParameters,
   type ForecastResponse,
+  VALID_TECHNOLOGIES,
+  VALID_TRACKING,
   calculateSpecificYield,
   isDaytimeHour,
   validateArrayParameters,
@@ -23,52 +27,48 @@ export const Route = createFileRoute('/')({
   component: PVForecastPage,
 })
 
-function PVForecastPage() {
-  const [kwp, setKwp] = useState<number>(10.0)
-  const [technology, setTechnology] = useState<string>('mono-Si')
-  const [tracking, setTracking] = useState<string>('fixed')
-  const [tiltDeg, setTiltDeg] = useState<number>(20.0)
-  const [azimuth, setAzimuth] = useState<number>(0.0)
-  const [predictDate, setPredictDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
+function FieldError({ field }: { field: AnyFieldApi }) {
+  if (!field.state.meta.isTouched || field.state.meta.isValid) {
+    return null
+  }
+  return (
+    <p role="alert" className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-400">
+      {field.state.meta.errors.join(', ')}
+    </p>
   )
+}
 
-  const [loading, setLoading] = useState<boolean>(false)
+function PVForecastPage() {
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ForecastResponse | null>(null)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
+  const form = useForm({
+    defaultValues: {
+      kwp: 10.0,
+      technology: 'mono-Si',
+      tracking: 'fixed',
+      tilt_deg: 20.0,
+      surface_azimuth_pvlib: 0.0,
+      predict_date: new Date().toISOString().split('T')[0],
+    } satisfies ArrayParameters,
+    onSubmit: async ({ value }) => {
+      setError(null)
+      const validation = validateArrayParameters(value)
+      if (!validation.valid) {
+        setError(validation.errors.join(' '))
+        return
+      }
 
-    const payload = {
-      kwp,
-      technology,
-      tracking,
-      tilt_deg: tiltDeg,
-      surface_azimuth_pvlib: azimuth,
-      predict_date: predictDate,
-    }
-
-    const validation = validateArrayParameters(payload)
-    if (!validation.valid) {
-      setError(validation.errors.join(' '))
-      return
-    }
-
-    setLoading(true)
-
-    try {
-      const data = await getForecastServerFn({
-        data: payload,
-      })
-      setResult(data)
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error executing forecast')
-    } finally {
-      setLoading(false)
-    }
-  }
+      try {
+        const data = await getForecastServerFn({
+          data: value,
+        })
+        setResult(data)
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Error executing forecast')
+      }
+    },
+  })
 
   const maxKwh = result ? Math.max(...result.hourly_breakdown.map((h) => h.kwh), 1) : 1
 
@@ -102,7 +102,7 @@ function PVForecastPage() {
 
       {/* Main Grid: Form + Results */}
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-12">
-        {/* Left Column: Form */}
+        {/* Left Column: Form (TanStack Form) */}
         <section className="island-shell rounded-2xl p-6 lg:col-span-4">
           <h2 className="flex items-center gap-2 text-lg font-bold text-[var(--sea-ink)]">
             <Sliders className="h-5 w-5 text-amber-500" />
@@ -112,155 +112,254 @@ function PVForecastPage() {
             Configure system capacity and mounting geometry.
           </p>
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              form.handleSubmit()
+            }}
+            className="mt-6 space-y-4"
+          >
             {/* Capacity in kWp */}
-            <div>
-              <label
-                htmlFor="input-kwp"
-                className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]"
-              >
-                Rated Peak Capacity (kWp)
-              </label>
-              <div className="relative mt-1">
-                <input
-                  id="input-kwp"
-                  type="number"
-                  step="0.1"
-                  min="0.5"
-                  max="1000"
-                  required
-                  value={kwp}
-                  onChange={(e) => setKwp(parseFloat(e.target.value) || 0)}
-                  className="w-full rounded-xl border border-[var(--line)] bg-[var(--input-bg)] px-4 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
-                />
-                <span className="absolute right-3 top-2.5 text-xs text-[var(--sea-ink-soft)]">
-                  kWp
-                </span>
-              </div>
-            </div>
+            <form.Field
+              name="kwp"
+              validators={{
+                onChange: ({ value }) =>
+                  typeof value !== 'number' || isNaN(value) || value <= 0
+                    ? 'Peak capacity (kWp) must be greater than 0.'
+                    : value > 5000
+                      ? 'Peak capacity (kWp) exceeds maximum allowable fleet size of 5000 kWp.'
+                      : undefined,
+              }}
+              children={(field) => (
+                <div>
+                  <label
+                    htmlFor={field.name}
+                    className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]"
+                  >
+                    Rated Peak Capacity (kWp)
+                  </label>
+                  <div className="relative mt-1">
+                    <input
+                      id={field.name}
+                      name={field.name}
+                      type="number"
+                      step="0.1"
+                      min="0.5"
+                      max="1000"
+                      required
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(parseFloat(e.target.value) || 0)}
+                      className="w-full rounded-xl border border-[var(--line)] bg-[var(--input-bg)] px-4 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
+                    />
+                    <span className="absolute right-3 top-2.5 text-xs text-[var(--sea-ink-soft)]">
+                      kWp
+                    </span>
+                  </div>
+                  <FieldError field={field} />
+                </div>
+              )}
+            />
 
             {/* Cell Technology */}
-            <div>
-              <label
-                htmlFor="select-technology"
-                className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]"
-              >
-                Cell Technology
-              </label>
-              <div className="relative mt-1">
-                <select
-                  id="select-technology"
-                  value={technology}
-                  onChange={(e) => setTechnology(e.target.value)}
-                  className="w-full rounded-xl border border-[var(--line)] bg-[var(--input-bg)] px-4 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
-                >
-                  <option value="mono-Si">Monocrystalline (mono-Si)</option>
-                  <option value="poly-Si">Polycrystalline (poly-Si)</option>
-                  <option value="CdTe">Cadmium Telluride (CdTe)</option>
-                  <option value="CIGS">CIGS Thin-Film</option>
-                  <option value="HIT">Heterojunction (HIT)</option>
-                  <option value="a-Si">Amorphous Silicon (a-Si)</option>
-                  <option value="CPV">Concentrator PV (CPV)</option>
-                </select>
-              </div>
-            </div>
+            <form.Field
+              name="technology"
+              validators={{
+                onChange: ({ value }) =>
+                  !VALID_TECHNOLOGIES.includes(value as (typeof VALID_TECHNOLOGIES)[number])
+                    ? `Invalid technology: ${value}.`
+                    : undefined,
+              }}
+              children={(field) => (
+                <div>
+                  <label
+                    htmlFor={field.name}
+                    className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]"
+                  >
+                    Cell Technology
+                  </label>
+                  <div className="relative mt-1">
+                    <select
+                      id={field.name}
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      className="w-full rounded-xl border border-[var(--line)] bg-[var(--input-bg)] px-4 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
+                    >
+                      <option value="mono-Si">Monocrystalline (mono-Si)</option>
+                      <option value="poly-Si">Polycrystalline (poly-Si)</option>
+                      <option value="CdTe">Cadmium Telluride (CdTe)</option>
+                      <option value="CIGS">CIGS Thin-Film</option>
+                      <option value="HIT">Heterojunction (HIT)</option>
+                      <option value="a-Si">Amorphous Silicon (a-Si)</option>
+                      <option value="CPV">Concentrator PV (CPV)</option>
+                    </select>
+                  </div>
+                  <FieldError field={field} />
+                </div>
+              )}
+            />
 
             {/* Tracking Type */}
-            <div>
-              <label
-                htmlFor="select-tracking"
-                className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]"
-              >
-                Tracking System
-              </label>
-              <div className="relative mt-1">
-                <select
-                  id="select-tracking"
-                  value={tracking}
-                  onChange={(e) => setTracking(e.target.value)}
-                  className="w-full rounded-xl border border-[var(--line)] bg-[var(--input-bg)] px-4 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
-                >
-                  <option value="fixed">Fixed Mount</option>
-                  <option value="single_axis">Single-Axis Tracker</option>
-                  <option value="dual_axis">Dual-Axis Tracker</option>
-                </select>
-              </div>
-            </div>
+            <form.Field
+              name="tracking"
+              validators={{
+                onChange: ({ value }) =>
+                  !VALID_TRACKING.includes(value as (typeof VALID_TRACKING)[number])
+                    ? `Invalid tracking: ${value}.`
+                    : undefined,
+              }}
+              children={(field) => (
+                <div>
+                  <label
+                    htmlFor={field.name}
+                    className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]"
+                  >
+                    Tracking System
+                  </label>
+                  <div className="relative mt-1">
+                    <select
+                      id={field.name}
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      className="w-full rounded-xl border border-[var(--line)] bg-[var(--input-bg)] px-4 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
+                    >
+                      <option value="fixed">Fixed Mount</option>
+                      <option value="single_axis">Single-Axis Tracker</option>
+                      <option value="dual_axis">Dual-Axis Tracker</option>
+                    </select>
+                  </div>
+                  <FieldError field={field} />
+                </div>
+              )}
+            />
 
             {/* Tilt & Azimuth Grid */}
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label
-                  htmlFor="input-tilt"
-                  className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]"
-                >
-                  Tilt Angle (°)
-                </label>
-                <input
-                  id="input-tilt"
-                  type="number"
-                  step="1"
-                  min="0"
-                  max="90"
-                  value={tiltDeg}
-                  onChange={(e) => setTiltDeg(parseFloat(e.target.value) || 0)}
-                  className="mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--input-bg)] px-3 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="input-azimuth"
-                  className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]"
-                >
-                  Azimuth (°)
-                </label>
-                <input
-                  id="input-azimuth"
-                  type="number"
-                  step="1"
-                  min="-180"
-                  max="360"
-                  value={azimuth}
-                  onChange={(e) => setAzimuth(parseFloat(e.target.value) || 0)}
-                  className="mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--input-bg)] px-3 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
-                />
-              </div>
-            </div>
+              <form.Field
+                name="tilt_deg"
+                validators={{
+                  onChange: ({ value }) =>
+                    typeof value !== 'number' || isNaN(value) || value < 0 || value > 90
+                      ? 'Tilt angle must be between 0° and 90°.'
+                      : undefined,
+                }}
+                children={(field) => (
+                  <div>
+                    <label
+                      htmlFor={field.name}
+                      className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]"
+                    >
+                      Tilt Angle (°)
+                    </label>
+                    <input
+                      id={field.name}
+                      name={field.name}
+                      type="number"
+                      step="1"
+                      min="0"
+                      max="90"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(parseFloat(e.target.value) || 0)}
+                      className="mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--input-bg)] px-3 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
+                    />
+                    <FieldError field={field} />
+                  </div>
+                )}
+              />
 
-            {/* Prediction Date */}
-            <div>
-              <label
-                htmlFor="input-predict-date"
-                className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]"
-              >
-                Request Date (Predicting Tomorrow D+1)
-              </label>
-              <input
-                id="input-predict-date"
-                type="date"
-                value={predictDate}
-                onChange={(e) => setPredictDate(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--input-bg)] px-3 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
+              <form.Field
+                name="surface_azimuth_pvlib"
+                validators={{
+                  onChange: ({ value }) =>
+                    typeof value !== 'number' || isNaN(value) || value < -180 || value > 360
+                      ? 'Azimuth must be between -180° and 360°.'
+                      : undefined,
+                }}
+                children={(field) => (
+                  <div>
+                    <label
+                      htmlFor={field.name}
+                      className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]"
+                    >
+                      Azimuth (°)
+                    </label>
+                    <input
+                      id={field.name}
+                      name={field.name}
+                      type="number"
+                      step="1"
+                      min="-180"
+                      max="360"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(parseFloat(e.target.value) || 0)}
+                      className="mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--input-bg)] px-3 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
+                    />
+                    <FieldError field={field} />
+                  </div>
+                )}
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3 font-semibold text-white shadow-md transition hover:bg-amber-600 disabled:opacity-50"
-            >
-              {loading ? (
-                <>
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Predicting via LSTM...
-                </>
-              ) : (
-                <>
-                  <Zap className="h-4 w-4" />
-                  Generate D+1 Forecast
-                </>
+            {/* Prediction Date */}
+            <form.Field
+              name="predict_date"
+              validators={{
+                onChange: ({ value }) =>
+                  value && !/^\d{4}-\d{2}-\d{2}$/.test(value)
+                    ? 'Predict date must follow YYYY-MM-DD format.'
+                    : undefined,
+              }}
+              children={(field) => (
+                <div>
+                  <label
+                    htmlFor={field.name}
+                    className="block text-xs font-semibold uppercase tracking-wider text-[var(--sea-ink-soft)]"
+                  >
+                    Request Date (Predicting Tomorrow D+1)
+                  </label>
+                  <input
+                    id={field.name}
+                    name={field.name}
+                    type="date"
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--input-bg)] px-3 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
+                  />
+                  <FieldError field={field} />
+                </div>
               )}
-            </button>
+            />
+
+            <form.Subscribe
+              selector={(state) => [state.canSubmit, state.isSubmitting]}
+              children={([canSubmit, isSubmitting]) => (
+                <button
+                  type="submit"
+                  disabled={!canSubmit || isSubmitting}
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3 font-semibold text-white shadow-md transition hover:bg-amber-600 disabled:opacity-50"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      Predicting via LSTM...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-4 w-4" />
+                      Generate D+1 Forecast
+                    </>
+                  )}
+                </button>
+              )}
+            />
           </form>
 
           {error && (
@@ -368,7 +467,7 @@ function PVForecastPage() {
                       Daytime Output
                     </span>
                     <span className="flex items-center gap-1.5 text-[var(--sea-ink-soft)]">
-                      <span className="h-3 w-3 rounded bg-slate-400/40 inline-block" />
+                      <span className="h-3 w-3 rounded bg-slate-400/40 dark:bg-slate-600/60 inline-block" />
                       Night
                     </span>
                   </div>
