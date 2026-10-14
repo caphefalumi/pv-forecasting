@@ -18,7 +18,7 @@ function About() {
         </p>
 
         <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="rounded-xl border border-[var(--line)] bg-[var(--header-bg)] p-5">
+          <div className="rounded-xl border border-[var(--line)] bg-[var(--input-bg)] p-5">
             <div className="flex items-center gap-2 text-sm font-bold text-[var(--sea-ink)]">
               <Database className="h-4 w-4 text-amber-500" />
               1. Leakage-Free Data & Physics Pipeline
@@ -28,7 +28,7 @@ function About() {
             </p>
           </div>
 
-          <div className="rounded-xl border border-[var(--line)] bg-[var(--header-bg)] p-5">
+          <div className="rounded-xl border border-[var(--line)] bg-[var(--input-bg)] p-5">
             <div className="flex items-center gap-2 text-sm font-bold text-[var(--sea-ink)]">
               <Cpu className="h-4 w-4 text-blue-500" />
               2. Fleet LSTM & Champion/Challenger Lifecycle
@@ -38,7 +38,7 @@ function About() {
             </p>
           </div>
 
-          <div className="rounded-xl border border-[var(--line)] bg-[var(--header-bg)] p-5">
+          <div className="rounded-xl border border-[var(--line)] bg-[var(--input-bg)] p-5">
             <div className="flex items-center gap-2 text-sm font-bold text-[var(--sea-ink)]">
               <ShieldCheck className="h-4 w-4 text-emerald-500" />
               3. Zero-Downtime Cloud Serving
@@ -48,7 +48,7 @@ function About() {
             </p>
           </div>
 
-          <div className="rounded-xl border border-[var(--line)] bg-[var(--header-bg)] p-5">
+          <div className="rounded-xl border border-[var(--line)] bg-[var(--input-bg)] p-5">
             <div className="flex items-center gap-2 text-sm font-bold text-[var(--sea-ink)]">
               <Gauge className="h-4 w-4 text-purple-500" />
               4. Four-Layer Monitoring & Drift Attribution

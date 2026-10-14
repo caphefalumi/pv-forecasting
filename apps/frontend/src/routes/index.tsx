@@ -131,7 +131,7 @@ function PVForecastPage() {
                   required
                   value={kwp}
                   onChange={(e) => setKwp(parseFloat(e.target.value) || 0)}
-                  className="w-full rounded-xl border border-[var(--line)] bg-[var(--header-bg)] px-4 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
+                  className="w-full rounded-xl border border-[var(--line)] bg-[var(--input-bg)] px-4 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
                 />
                 <span className="absolute right-3 top-2.5 text-xs text-[var(--sea-ink-soft)]">
                   kWp
@@ -152,7 +152,7 @@ function PVForecastPage() {
                   id="select-technology"
                   value={technology}
                   onChange={(e) => setTechnology(e.target.value)}
-                  className="w-full rounded-xl border border-[var(--line)] bg-[var(--header-bg)] px-4 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
+                  className="w-full rounded-xl border border-[var(--line)] bg-[var(--input-bg)] px-4 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
                 >
                   <option value="mono-Si">Monocrystalline (mono-Si)</option>
                   <option value="poly-Si">Polycrystalline (poly-Si)</option>
@@ -178,7 +178,7 @@ function PVForecastPage() {
                   id="select-tracking"
                   value={tracking}
                   onChange={(e) => setTracking(e.target.value)}
-                  className="w-full rounded-xl border border-[var(--line)] bg-[var(--header-bg)] px-4 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
+                  className="w-full rounded-xl border border-[var(--line)] bg-[var(--input-bg)] px-4 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
                 >
                   <option value="fixed">Fixed Mount</option>
                   <option value="single_axis">Single-Axis Tracker</option>
@@ -204,7 +204,7 @@ function PVForecastPage() {
                   max="90"
                   value={tiltDeg}
                   onChange={(e) => setTiltDeg(parseFloat(e.target.value) || 0)}
-                  className="mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--header-bg)] px-3 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
+                  className="mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--input-bg)] px-3 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
                 />
               </div>
               <div>
@@ -222,7 +222,7 @@ function PVForecastPage() {
                   max="360"
                   value={azimuth}
                   onChange={(e) => setAzimuth(parseFloat(e.target.value) || 0)}
-                  className="mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--header-bg)] px-3 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
+                  className="mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--input-bg)] px-3 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
                 />
               </div>
             </div>
@@ -240,7 +240,7 @@ function PVForecastPage() {
                 type="date"
                 value={predictDate}
                 onChange={(e) => setPredictDate(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--header-bg)] px-3 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
+                className="mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--input-bg)] px-3 py-2 text-sm font-semibold text-[var(--sea-ink)] focus:border-amber-500 focus:outline-none"
               />
             </div>
 
@@ -385,9 +385,9 @@ function PVForecastPage() {
                         className="group relative flex h-full flex-1 flex-col items-center justify-end"
                       >
                         {/* Hover Tooltip */}
-                        <div className="pointer-events-none absolute -top-12 z-20 hidden rounded-lg bg-[var(--sea-ink)] px-2 py-1 text-[10px] text-white shadow group-hover:flex flex-col items-center whitespace-nowrap">
+                        <div className="pointer-events-none absolute -top-12 z-20 hidden rounded-lg border border-[var(--line)] bg-[var(--surface-strong)] px-2.5 py-1 text-[10px] font-semibold text-[var(--sea-ink)] shadow-lg group-hover:flex flex-col items-center whitespace-nowrap">
                           <span>{h.hour}: {h.kwh} kWh</span>
-                          <span className="opacity-75">{h.ghi_fc} W/m²</span>
+                          <span className="text-[var(--sea-ink-soft)]">{h.ghi_fc} W/m²</span>
                         </div>
 
                         {/* Bar */}
@@ -397,8 +397,8 @@ function PVForecastPage() {
                             isDay
                               ? h.kwh === result.peak_kwh
                                 ? 'bg-amber-400 ring-2 ring-amber-500'
-                                : 'bg-amber-500/80 hover:bg-amber-500'
-                              : 'bg-slate-300/30 dark:bg-slate-700/30'
+                                : 'bg-amber-500 hover:bg-amber-400'
+                              : 'bg-slate-400/40 dark:bg-slate-600/60'
                           }`}
                         />
                         <span className="mt-2 text-[9px] text-[var(--sea-ink-soft)]">
