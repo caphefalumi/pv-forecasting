@@ -26,6 +26,7 @@ export const VALID_TECHNOLOGIES = [
   'CIGS',
   'HIT',
   'a-Si',
+  'CPV',
 ] as const
 
 export const VALID_TRACKING = ['fixed', 'single_axis', 'dual_axis'] as const

@@ -47,6 +47,17 @@ describe('PV Forecasting Domain Logic (bun:test)', () => {
       expect(result.errors).toHaveLength(0)
     })
 
+    it('accepts all 7 backend-supported PV technologies and 3 tracking modes', () => {
+      const techs = ['mono-Si', 'poly-Si', 'CdTe', 'CIGS', 'HIT', 'a-Si', 'CPV']
+      for (const tech of techs) {
+        expect(validateArrayParameters({ ...validParams, technology: tech }).valid).toBe(true)
+      }
+      const trackings = ['fixed', 'single_axis', 'dual_axis']
+      for (const tr of trackings) {
+        expect(validateArrayParameters({ ...validParams, tracking: tr }).valid).toBe(true)
+      }
+    })
+
     it('flags non-positive or missing kwp', () => {
       const resZero = validateArrayParameters({ ...validParams, kwp: 0 })
       expect(resZero.valid).toBe(false)

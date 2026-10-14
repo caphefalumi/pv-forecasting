@@ -6,8 +6,6 @@ import {
   Zap,
   Activity,
   Calendar,
-  Layers,
-  Compass,
   Sliders,
   CheckCircle2,
   AlertCircle,
@@ -18,6 +16,7 @@ import {
   type HourlyPoint,
   calculateSpecificYield,
   isDaytimeHour,
+  validateArrayParameters,
 } from '../lib/forecast-utils'
 
 // Server Function: calls backend FastAPI service running locally or on AWS ALB
@@ -81,19 +80,28 @@ function PVForecastPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
     setError(null)
+
+    const payload = {
+      kwp,
+      technology,
+      tracking,
+      tilt_deg: tiltDeg,
+      surface_azimuth_pvlib: azimuth,
+      predict_date: predictDate,
+    }
+
+    const validation = validateArrayParameters(payload)
+    if (!validation.valid) {
+      setError(validation.errors.join(' '))
+      return
+    }
+
+    setLoading(true)
 
     try {
       const data = await getForecastServerFn({
-        data: {
-          kwp,
-          technology,
-          tracking,
-          tilt_deg: tiltDeg,
-          surface_azimuth_pvlib: azimuth,
-          predict_date: predictDate,
-        },
+        data: payload,
       })
       setResult(data)
     } catch (err: any) {
@@ -185,6 +193,7 @@ function PVForecastPage() {
                   <option value="CIGS">CIGS Thin-Film</option>
                   <option value="HIT">Heterojunction (HIT)</option>
                   <option value="a-Si">Amorphous Silicon (a-Si)</option>
+                  <option value="CPV">Concentrator PV (CPV)</option>
                 </select>
               </div>
             </div>
