@@ -9,6 +9,11 @@ output "cluster_arn" {
 }
 
 output "service_name" {
-  description = "ECS Service Name"
+  description = "FastAPI ECS Service Name"
   value       = aws_ecs_service.fastapi.name
+}
+
+output "mlflow_service_name" {
+  description = "MLflow ECS Service Name"
+  value       = aws_ecs_service.mlflow.name
 }

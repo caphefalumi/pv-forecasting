@@ -1,0 +1,77 @@
+{
+  "title": "PV Forecasting MLOps Overview (Table 17 Multi-Layer Monitoring)",
+  "uid": "pv-forecasting-mlops",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Layer 1 (Infrastructure): ECS Fargate CPU & Memory Utilization",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "aws_ecs_cpuutilization_average{ClusterName=\"pv-forecasting-cluster\"}",
+          "legendFormat": "CPU Utilization (%)"
+        },
+        {
+          "expr": "aws_ecs_memory_utilization_average{ClusterName=\"pv-forecasting-cluster\"}",
+          "legendFormat": "Memory Utilization (%)"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Layer 2 (Service): FastAPI Error Rate & p95 Latency",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service=\"solar-api\"}[5m])) by (le))",
+          "legendFormat": "p95 Latency (s)"
+        },
+        {
+          "expr": "sum(rate(http_requests_total{service=\"solar-api\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{service=\"solar-api\"}[5m]))",
+          "legendFormat": "5xx Error Rate"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Layer 3 (Data Quality): Ingestion Schema & Physical Range Violations",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(pv_ingestion_schema_violations_total)",
+          "legendFormat": "Schema Violations"
+        },
+        {
+          "expr": "sum(pv_ingestion_range_flags_total)",
+          "legendFormat": "Physical Range Flags (Flagged, Not Deleted)"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Layer 4 (Model): Daily nMAE (Fleet & 6 Held-Out Arrays) & Evidently Drift Score",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "pv_model_nmae{cohort=\"all\"}",
+          "legendFormat": "Fleet nMAE"
+        },
+        {
+          "expr": "pv_model_nmae{cohort=\"held_out_6\"}",
+          "legendFormat": "6 Held-Out Cold-Start Arrays nMAE"
+        },
+        {
+          "expr": "drift_score{site=\"dkasc\"}",
+          "legendFormat": "Evidently Covariate Drift Score (Diagnostic)"
+        }
+      ]
+    }
+  ]
+}

@@ -27,10 +27,12 @@ RUN groupadd -g 10001 appuser && \
 # Copy installed Python packages and CLI from builder
 COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
 
-# Copy application code with proper unprivileged ownership
+# Copy application code and MLOps job modules with proper unprivileged ownership
 COPY --chown=appuser:appuser pvdata/ ./pvdata/
+COPY --chown=appuser:appuser jobs/ ./jobs/
 COPY --chown=appuser:appuser config/ ./config/
 COPY --chown=appuser:appuser scripts/ ./scripts/
+COPY --chown=appuser:appuser ingest.py evaluate.py drift.py retrain.py promote.py ./
 
 RUN chmod +x scripts/run_weekly.sh
 

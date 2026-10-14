@@ -63,7 +63,7 @@ def check_dockerfile_multistage():
 
 
 def check_terraform_modules():
-    print_step("Step 3: Verify Terraform Modular Architecture (8 Modules)")
+    print_step("Step 3: Verify Terraform Modular Architecture & Report IaC (8 Modules + Env + Grafana)")
     modules = [
         "networking",
         "security",
@@ -80,6 +80,26 @@ def check_terraform_modules():
             print_pass(f"Module '{mod}' present")
         else:
             print_fail(f"Module '{mod}' missing at {mod_main}")
+
+    for env_file in ["dev.tfvars", "prod.tfvars"]:
+        env_path = TERRAFORM_DIR / "environments" / env_file
+        if env_path.exists():
+            print_pass(f"Environment config '{env_file}' present")
+        else:
+            print_fail(f"Missing environment file {env_path}")
+
+    grafana_json = ROOT_DIR / "infra" / "monitoring" / "grafana" / "dashboards" / "pv_forecasting_overview.json"
+    if grafana_json.exists():
+        print_pass("Grafana provisioned dashboard JSON present")
+    else:
+        print_fail(f"Missing Grafana dashboard JSON at {grafana_json}")
+
+    for job_mod in ["ingest.py", "evaluate.py", "drift_check.py", "retrain.py"]:
+        job_path = ROOT_DIR / "jobs" / job_mod
+        if job_path.exists():
+            print_pass(f"Table 20 batch job entrypoint 'jobs/{job_mod}' present")
+        else:
+            print_fail(f"Missing Table 20 entrypoint {job_path}")
 
 
 def check_api_endpoints():

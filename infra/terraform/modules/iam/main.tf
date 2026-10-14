@@ -12,6 +12,13 @@ resource "aws_iam_openid_connect_provider" "github" {
   ]
 }
 
+# ── Runtime Secrets in AWS Secrets Manager (Section 4.8.7) ────────────────────
+resource "aws_secretsmanager_secret" "runtime" {
+  name                    = "${var.project_name}-runtime-secrets"
+  description             = "Runtime credentials for PV Forecasting API, MLflow, and MLOps jobs"
+  recovery_window_in_days = 7
+}
+
 # ── GitHub Actions OIDC Role ──────────────────────────────────────────────────
 resource "aws_iam_role" "github_actions" {
   name = "${var.project_name}-github-actions-role"
@@ -65,7 +72,8 @@ resource "aws_iam_role_policy" "github_actions" {
           "ecs:UpdateService",
           "ecs:DescribeServices",
           "ecs:DescribeTaskDefinition",
-          "ecs:RegisterTaskDefinition"
+          "ecs:RegisterTaskDefinition",
+          "elbv2:DescribeLoadBalancers"
         ]
         Resource = "*"
       },
@@ -78,7 +86,7 @@ resource "aws_iam_role_policy" "github_actions" {
   })
 }
 
-# ── ECS Task Execution Role ───────────────────────────────────────────────────
+# ── ECS Task Execution Role (Pull from ECR, Write Logs, Read Secrets) ────────
 resource "aws_iam_role" "ecs_execution" {
   name = "${var.project_name}-ecs-execution-role"
 
@@ -101,7 +109,25 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_standard" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# ── ECS Task Role ─────────────────────────────────────────────────────────────
+resource "aws_iam_role_policy" "ecs_execution_secrets" {
+  name = "${var.project_name}-ecs-execution-secrets-policy"
+  role = aws_iam_role.ecs_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = aws_secretsmanager_secret.runtime.arn
+      }
+    ]
+  })
+}
+
+# ── ECS Task Role (S3 Data/Artifacts/Reports, Secrets Manager, Prometheus) ────
 resource "aws_iam_role" "ecs_task" {
   name = "${var.project_name}-ecs-task-role"
 
@@ -119,15 +145,15 @@ resource "aws_iam_role" "ecs_task" {
   })
 }
 
-# Grant ECS tasks read/write access to S3 data lake bucket
-resource "aws_iam_role_policy" "ecs_task_s3_lake" {
-  name = "${var.project_name}-ecs-task-s3-lake-policy"
+resource "aws_iam_role_policy" "ecs_task_least_privilege" {
+  name = "${var.project_name}-ecs-task-policy"
   role = aws_iam_role.ecs_task.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "S3BucketListing"
         Effect = "Allow"
         Action = [
           "s3:ListBucket",
@@ -136,6 +162,7 @@ resource "aws_iam_role_policy" "ecs_task_s3_lake" {
         Resource = var.s3_data_lake_bucket_arn != "" ? var.s3_data_lake_bucket_arn : "*"
       },
       {
+        Sid    = "S3DataArtifactsReportsRW"
         Effect = "Allow"
         Action = [
           "s3:GetObject",
@@ -143,6 +170,26 @@ resource "aws_iam_role_policy" "ecs_task_s3_lake" {
           "s3:DeleteObject"
         ]
         Resource = var.s3_data_lake_bucket_arn != "" ? "${var.s3_data_lake_bucket_arn}/*" : "*"
+      },
+      {
+        Sid    = "RuntimeSecretsAccess"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = aws_secretsmanager_secret.runtime.arn
+      },
+      {
+        Sid    = "PrometheusRemoteWrite"
+        Effect = "Allow"
+        Action = [
+          "aps:RemoteWrite",
+          "aps:GetSeries",
+          "aps:GetLabels",
+          "aps:GetMetricMetadata"
+        ]
+        Resource = "*"
       }
     ]
   })

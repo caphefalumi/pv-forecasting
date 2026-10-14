@@ -62,7 +62,7 @@ module "iam" {
   s3_data_lake_bucket_arn = module.storage.bucket_arn
 }
 
-# ── Module 7: ECS Fargate Cluster & Service ───────────────────────────────────
+# ── Module 7: ECS Fargate Cluster & Services (FastAPI & MLflow) ───────────────
 module "ecs" {
   source                    = "./modules/ecs"
   project_name              = var.project_name
@@ -76,6 +76,7 @@ module "ecs" {
   supabase_url              = var.supabase_url
   supabase_service_role_key = var.supabase_service_role_key
   mlflow_tracking_uri       = var.mlflow_tracking_uri
+  s3_bucket_uri             = module.storage.bucket_uri
 }
 
 # ── Module 8: EventBridge Pipeline Scheduler ───────────────────────────────────

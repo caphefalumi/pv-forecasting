@@ -6,8 +6,8 @@ variable "aws_region" {
 
 variable "environment" {
   type        = string
-  description = "Environment name"
-  default     = "production"
+  description = "Environment name (dev or prod)"
+  default     = "prod"
 }
 
 variable "project_name" {
@@ -19,7 +19,7 @@ variable "project_name" {
 variable "github_repo" {
   type        = string
   description = "GitHub repository (owner/repo) for OIDC authentication"
-  default     = "Dangduytoan12l/pv-forecasting"
+  default     = "COS40007-2026-MinhHA10-Fall26/pv-forecasting"
 }
 
 variable "supabase_url" {
@@ -30,13 +30,14 @@ variable "supabase_url" {
 
 variable "supabase_service_role_key" {
   type        = string
-  description = "Supabase Service Role Key"
+  description = "Supabase Service Role Key (injected via CI secrets or Secrets Manager)"
   sensitive   = true
   default     = ""
 }
 
 variable "mlflow_tracking_uri" {
   type        = string
-  description = "MLflow tracking server URI"
-  default     = "postgresql://postgres.lxtdcahxubojfipsetml:binhphuong2035@aws-0-ap-south-1.pooler.supabase.com:6543/postgres"
+  description = "MLflow tracking server URI or backend store URI (sensitive)"
+  sensitive   = true
+  default     = ""
 }

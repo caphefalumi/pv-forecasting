@@ -51,5 +51,12 @@ variable "supabase_service_role_key" {
 
 variable "mlflow_tracking_uri" {
   type        = string
-  description = "MLflow Tracking URI"
+  description = "MLflow Tracking URI / Backend Store URI"
+  sensitive   = true
+}
+
+variable "s3_bucket_uri" {
+  type        = string
+  description = "S3 URI for data lake and MLflow artifact store"
+  default     = "s3://pv-forecasting-data-lake"
 }

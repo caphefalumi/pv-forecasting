@@ -25,9 +25,9 @@ variable "project_name" {
 
 variable "database_password" {
   type        = string
-  description = "Database master password"
+  description = "Database master password (supplied via TF_VAR_database_password)"
   sensitive   = true
-  default     = "binhphuong2035"
+  default     = ""
 }
 
 variable "region" {
