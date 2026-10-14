@@ -1,0 +1,93 @@
+name: Deploy FastAPI Service (Sprint 2)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "apps/backend/**"
+      - ".github/workflows/deploy_backend.yml"
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # Required for AWS OIDC authentication
+  contents: read
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: pv-forecasting-backend
+  ECS_CLUSTER: pv-forecasting-cluster
+  ECS_SERVICE: pv-forecasting-fastapi-service
+  ALB_NAME: pv-forecasting-alb
+
+jobs:
+  build-and-deploy:
+    name: Build Multi-Stage Image & Rolling Deploy to ECS Fargate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-DeployBackend
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/backend
+          file: ./apps/backend/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to Amazon ECS Fargate (Rolling Update)
+        run: |
+          echo "Updating ECS service with new image..."
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Await ECS Deployment Stability
+        run: |
+          echo "Waiting for rolling deployment to reach stable state..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }}
+          echo "Deployment successful."
+
+      - name: Run Ansible Post-Deployment Smoke Verification
+        run: |
+          echo "Resolving ALB DNS for smoke testing..."
+          ALB_DNS=$(aws elbv2 describe-load-balancers \
+            --names ${{ env.ALB_NAME }} \
+            --query "LoadBalancers[0].DNSName" \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+
+          if [ -n "$ALB_DNS" ] && [ "$ALB_DNS" != "None" ]; then
+            echo "Target ALB endpoint: http://${ALB_DNS}"
+            pip install --no-cache-dir ansible-core
+            ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbook.yml \
+              -e "api_base_url=http://${ALB_DNS}"
+          else
+            echo "Warning: Could not resolve ALB DNS; skipping live endpoint smoke check."
+          fi

@@ -1,0 +1,37 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.143.0",
+    "httpx>=0.28.1",
+    "mlflow-skinny>=3.17.0",
+    "numpy>=2.5.4",
+    "pandas>=3.0.6",
+    "pydantic>=2.14.1",
+    "pydantic-settings>=2.15.0",
+    "python-dotenv>=1.2.4",
+    "scikit-learn>=1.9.1",
+    "supabase>=2.32.0",
+    "torch>=2.14.1",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "pypdf>=6.20.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests/unit", "tests/integration"]
+asyncio_mode = "auto"
+markers = [
+    "unit: Unit tests (fast, in-memory)",
+    "integration: Integration tests (routes, external APIs, db)",
+]
+

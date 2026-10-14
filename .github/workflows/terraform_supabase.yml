@@ -1,0 +1,54 @@
+name: Terraform Supabase Stack
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "infra/terraform/supabase/**"
+      - ".github/workflows/terraform_supabase.yml"
+  pull_request:
+    paths:
+      - "infra/terraform/supabase/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    name: Validate, Plan & Apply Supabase Stack
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform/supabase
+
+    env:
+      # Provider Personal Access Token
+      TF_VAR_supabase_access_token: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.3"
+
+      - name: Terraform Format Check
+        run: terraform fmt -check
+
+      - name: Terraform Init (S3 Remote State in Supabase Storage)
+        run: |
+          terraform init \
+            -backend-config="access_key=${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}" \
+            -backend-config="secret_key=${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}"
+
+      - name: Terraform Plan
+        run: terraform plan -no-color
+
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: terraform apply -auto-approve -no-color

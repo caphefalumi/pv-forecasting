@@ -16,7 +16,25 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-
+target/
+node_modules/
+# Local development and secrets
 .env
+.env.local
 mlruns/
 mlflow.db
+.terraform/
+*.tfstate*
+access-token
+*access-token*
+backend.hcl
+*backend.hcl*
+
+# AI Agent harnesses & session logs (Course Git Hygiene Rule)
+.pi-glla/
+AGENTS.md
+agents.md
+rubric.md
+RUBRIC.md
+*.prompt.md
+

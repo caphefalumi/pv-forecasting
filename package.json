@@ -1,0 +1,30 @@
+{
+  "name": "pv-forecasting",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "bun run frontend:dev",
+    "frontend:dev": "bun run --cwd apps/frontend dev",
+    "frontend:build": "bun run --cwd apps/frontend build",
+    "frontend:test": "bun run --cwd apps/frontend test",
+    "backend:dev": "cd apps/backend && uv run uvicorn main:app --reload --port 8000",
+    "backend:test": "cd apps/backend && uv run pytest -v",
+    "test:unit": "bun run --cwd apps/frontend test:unit && cd apps/backend && uv run pytest tests/unit -v",
+    "test:integration": "bun run --cwd apps/frontend test:integration && cd apps/backend && uv run pytest tests/integration -v",
+    "test": "bun run test:unit && bun run test:integration",
+    "smoke": "python infra/ansible/run_smoke.py",
+    "smoke:ansible": "ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbook.yml",
+    "tf:validate": "cd infra/terraform && terraform validate",
+    "tf:fmt": "cd infra/terraform && terraform fmt -recursive"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^7"
+  }
+}
