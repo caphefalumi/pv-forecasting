@@ -71,18 +71,23 @@ jobs:
 
       - name: Terraform plan
         id: plan
-        run: |
-          terraform plan -input=false -no-color -out=tfplan \
-            -var="supabase_url=${{ secrets.SUPABASE_URL }}" \
-            -var="supabase_service_role_key=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -var="mlflow_tracking_uri=${{ secrets.MLFLOW_TRACKING_URI }}" \
-            -var="supabase_s3_access_key=${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}" \
-            -var="supabase_s3_secret_key=${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}" \
-            -var="otel_exporter_otlp_protocol=${{ vars.OTEL_EXPORTER_OTLP_PROTOCOL }}" \
-            -var="otel_exporter_otlp_endpoint=${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}" \
-            -var="otel_exporter_otlp_headers=${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}" \
-            -var="grafana_otlp_instance_id=${{ vars.GRAFANA_OTLP_INSTANCE_ID }}" \
-            -var="grafana_cloud_api_token=${{ secrets.GRAFANA_CLOUD_API_TOKEN }}"
+        env:
+          # Prefer TF_VAR_* so secrets are not mangled by shell -var="..." quoting
+          TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_grafana_cloud_api_token: ${{ secrets.GRAFANA_CLOUD_API_TOKEN }}
+          TF_VAR_otel_exporter_otlp_headers: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+          TF_VAR_supabase_service_role_key: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TF_VAR_mlflow_tracking_uri: ${{ secrets.MLFLOW_TRACKING_URI }}
+          TF_VAR_supabase_s3_access_key: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
+          TF_VAR_supabase_s3_secret_key: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
+          TF_VAR_supabase_url: ${{ secrets.SUPABASE_URL }}
+          TF_VAR_otel_exporter_otlp_protocol: ${{ vars.OTEL_EXPORTER_OTLP_PROTOCOL }}
+          TF_VAR_otel_exporter_otlp_endpoint: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
+          TF_VAR_grafana_otlp_instance_id: ${{ vars.GRAFANA_OTLP_INSTANCE_ID }}
+          TF_VAR_api_domain: ${{ vars.API_DOMAIN }}
+          TF_VAR_cloudflare_zone_name: ${{ vars.CLOUDFLARE_ZONE_NAME }}
+          TF_VAR_cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
+        run: terraform plan -input=false -no-color -out=tfplan
 
       - name: Terraform apply
         if: >-
@@ -90,15 +95,15 @@ jobs:
           (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
         run: terraform apply -input=false -auto-approve -no-color tfplan
 
-      - name: Publish ALB URL + frontend origin to GitHub env vars
+      - name: Publish API URL + frontend origin to GitHub env vars
         if: >-
           github.event_name == 'workflow_dispatch' && inputs.apply ||
           (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ALB_URL=$(terraform output -raw alb_dns_name)
-          gh variable set VITE_BACKEND_API_URL --env prod --body "$ALB_URL" --repo "$GITHUB_REPOSITORY"
+          API_URL=$(terraform output -raw api_url)
+          gh variable set VITE_BACKEND_API_URL --env prod --body "$API_URL" --repo "$GITHUB_REPOSITORY"
           gh variable set FRONTEND_ORIGIN --env prod --body "https://pv-forecasting.vercel.app" --repo "$GITHUB_REPOSITORY"
-          echo "Set VITE_BACKEND_API_URL=$ALB_URL"
+          echo "Set VITE_BACKEND_API_URL=$API_URL"
           echo "Set FRONTEND_ORIGIN=https://pv-forecasting.vercel.app"
