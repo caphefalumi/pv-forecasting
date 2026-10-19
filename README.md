@@ -2,7 +2,7 @@
 
 An end-to-end MLOps and cloud-native forecasting platform that predicts 24-hour photovoltaic (PV) solar energy generation (**kWh**) for the next day (**D+1**) and aggregates the daily total.
 
-Ground-truth labels are sourced from 46 solar arrays (31 usable: 25 training + 6 held-out cold-start) at the **Desert Knowledge Australia Solar Centre (DKASC)** in Alice Springs, paired with day-ahead numerical weather prediction (NWP) runs from **Open-Meteo Previous Runs**, `pvlib` solar physics features, a **PyTorch LSTM** fleet model, **MLflow** Champion/Challenger lifecycle management, **FastAPI** serving on **AWS ECS Fargate**, **TanStack Start / React 19** on **Vercel**, **Supabase** prediction logging, and **Grafana Cloud** observability.
+Ground-truth labels are sourced from 46 solar arrays (31 usable: 25 training + 6 held-out cold-start) at the **Desert Knowledge Australia Solar Centre (DKASC)** in Alice Springs, paired with day-ahead numerical weather prediction (NWP) runs from **Open-Meteo Previous Runs**, `pvlib` solar physics features, a **PyTorch LSTM** fleet model, **MLflow** Champion/Challenger lifecycle management, **FastAPI** serving on **AWS ECS Fargate**, **React 19 + TanStack Router** SPA on **Vercel**, **Supabase** prediction logging, and **Grafana Cloud** observability.
 
 ---
 
@@ -23,7 +23,7 @@ Ground-truth labels are sourced from 46 solar arrays (31 usable: 25 training + 6
 [solar-evaluate (Daily nMAE/RMSE)] ◄──── [MLflow Model Registry (@champion / @candidate)]
                                                         │
                                                         ▼
-[Vercel Frontend (TanStack Start)] ──HTTPS──► [AWS Public ALB] ──► [ECS Fargate: solar-api (FastAPI)]
+[Vercel Frontend (React SPA)] ──HTTPS──► [AWS Public ALB] ──► [ECS Fargate: solar-api (FastAPI)]
                                                                         │
                                                ┌────────────────────────┼────────────────────────┐
                                                ▼                        ▼                        ▼
@@ -44,7 +44,7 @@ Ground-truth labels are sourced from 46 solar arrays (31 usable: 25 training + 6
 │   └── terraform-supabase.yml      # Terraform validate, plan & apply for Supabase stack
 ├── apps/
 │   ├── backend/                    # FastAPI D+1 prediction service, Prometheus /metrics, MLflow loader
-│   └── frontend/                   # TanStack Start + React 19 + Tailwind v4 web UI (Vercel)
+│   └── frontend/                   # React 19 + TanStack Router/Query/Form SPA (Vercel)
 ├── config/
 │   └── pipeline.yaml               # Data pipeline configuration (QC, physics, time/array splits, recipes)
 ├── data/
@@ -60,7 +60,7 @@ Ground-truth labels are sourced from 46 solar arrays (31 usable: 25 training + 6
 │   └── mlops-lifecycle.md          # Splits, LSTM training, drift detection, and human-approved promotion
 ├── exports/                        # DVC pointer files (*.csv.dvc) tracking monthly datasets in S3
 ├── infra/
-│   ├── ansible/                    # Ansible playbook & cross-platform Python smoke verification runner
+│   ├── monitoring/                 # Grafana dashboard JSON provisioning
 │   ├── monitoring/grafana/         # Provisioned Grafana Cloud dashboards (Model/DQ & Infra/Service)
 │   └── terraform/                  # 8 modular AWS Terraform stacks + Supabase stack + dev/prod tfvars
 ├── jobs/                           # Containerized MLOps pipelines (ingest, evaluate, drift_check, retrain)

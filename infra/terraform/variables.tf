@@ -85,3 +85,46 @@ variable "schedules_enabled" {
   description = "Enable EventBridge pipeline schedules (false when not demoing)"
   default     = false
 }
+
+variable "supabase_storage_bucket" {
+  type        = string
+  description = "Supabase Storage bucket used as the data lake (S3-compatible)"
+  default     = "processed_data"
+}
+
+variable "supabase_s3_endpoint" {
+  type        = string
+  description = "Supabase Storage S3-compatible endpoint"
+  default     = "https://lxtdcahxubojfipsetml.supabase.co/storage/v1/s3"
+}
+
+variable "supabase_s3_access_key" {
+  type        = string
+  description = "Supabase S3 access key (same as Terraform backend)"
+  sensitive   = true
+  default     = ""
+}
+
+variable "supabase_s3_secret_key" {
+  type        = string
+  description = "Supabase S3 secret key (same as Terraform backend)"
+  sensitive   = true
+  default     = ""
+}
+
+variable "cors_origins" {
+  type        = list(string)
+  description = "Allowed browser origins for the FastAPI CORS middleware"
+  default = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://pv-forecasting.vercel.app",
+    "https://pv-forecasting-caphefalumis-projects.vercel.app",
+  ]
+}
+
+variable "frontend_origin" {
+  type        = string
+  description = "Primary production frontend origin (Vercel)"
+  default     = "https://pv-forecasting.vercel.app"
+}

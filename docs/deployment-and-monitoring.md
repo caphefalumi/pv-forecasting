@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **CI/CD Engine** | GitHub Actions (`.github/workflows/`) with AWS OIDC Authentication |
-| **Infrastructure as Code** | Terraform (`infra/terraform/`) + Supabase Remote S3 State + Ansible Smoke Suite (`infra/ansible/`) |
+| **Infrastructure as Code** | Terraform (`infra/terraform/`) + Supabase Remote S3 State |
 | **Observability Stack** | AWS CloudWatch Container Insights + Prometheus + Grafana Cloud (Prometheus, Loki, Tempo) |
 
 ---
@@ -14,8 +14,8 @@ All workflows live in `.github/workflows/` and use standard kebab-case naming:
 
 | Workflow File | Trigger | Responsibilities |
 |---|---|---|
-| `ci.yml` | Push to `main`/`master`, Pull Requests | Runs FastAPI unit & integration tests (`uv run pytest`), Frontend unit & integration tests (`bun test`), strict TypeScript check (`tsc --noEmit`), Vite production build (`bun run build`), Ansible verification playbook, and `terraform fmt -check` + `terraform validate`. |
-| `deploy-backend.yml` | Push to `apps/backend/**`, Manual dispatch | Authenticates to AWS via OIDC, builds the multi-stage `apps/backend/Dockerfile`, pushes `:latest` and `:<git-sha>` tags to Amazon ECR, triggers a rolling ECS Fargate deployment, waits for `services-stable`, and executes the Ansible post-deployment smoke suite against the live ALB DNS. |
+| `ci.yml` | Push to `main`/`master`, Pull Requests | Runs FastAPI unit & integration tests (`uv run pytest`), Frontend unit & integration tests (`bun test`), strict TypeScript check (`tsc --noEmit`), Vite production build (`bun run build`), and `terraform fmt -check` + `terraform validate`. |
+| `deploy-backend.yml` | Push to `apps/backend/**`, Manual dispatch | Authenticates to AWS via OIDC, builds the multi-stage `apps/backend/Dockerfile`, pushes `:latest` and `:<git-sha>` tags to Amazon ECR, triggers a rolling ECS Fargate deployment, waits for `services-stable`, and curls the ALB `/health` endpoint. |
 | `promote-model.yml` | Manual `workflow_dispatch` (`model_version`, `approver`) | Executes `python promote.py` to promote a verified `@candidate` model to `@champion` in the MLflow Model Registry and sends a Discord confirmation notification. |
 | `terraform-aws.yml` | Push/PR to `infra/terraform/**`, Manual dispatch | Initializes remote state in Supabase S3, validates formatting, runs `terraform plan`, and applies the 8-module AWS stack on merge to `main`/`master`. |
 | `terraform-supabase.yml` | Push/PR to `infra/terraform/supabase/**`, Manual dispatch | Plans and applies the Supabase PostgreSQL & Storage project configuration. |
@@ -83,17 +83,7 @@ Failed scheduled invocations are routed to the SQS Dead-Letter Queue (`pv-foreca
 
 ## 5. Verification & Rollback Procedures
 
-### 5.1 Smoke Verification Suite
-Run the cross-platform smoke test runner locally or in CI:
-```bash
-# Local static + endpoint check
-bun run smoke
-
-# Or via Ansible playbook (Linux / macOS / WSL / GitHub Actions)
-bun run smoke:ansible
-```
-
-### 5.2 Application & Model Rollback
+### 5.1 Application & Model Rollback
 - **Application Rollback (ECS Fargate):** Update `pv-forecasting-fastapi-service` to the previous ECS task definition revision or redeploy the prior Git commit SHA image from Amazon ECR:
   ```bash
   aws ecs update-service \

@@ -1,15 +1,22 @@
 import { defineConfig } from 'vite'
-import { devtools } from '@tanstack/devtools-vite'
-
-import { tanstackStart } from '@tanstack/react-start/plugin/vite'
-
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import viteReact from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { nitro } from 'nitro/vite'
 
-const config = defineConfig({
+export default defineConfig({
   resolve: { tsconfigPaths: true },
-  plugins: [devtools(), nitro(), tailwindcss(), tanstackStart(), viteReact()],
+  server: {
+    port: 3000,
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+    },
+  },
+  plugins: [
+    tanstackRouter({ target: 'react', autoCodeSplitting: true }),
+    viteReact(),
+    tailwindcss(),
+  ],
 })
-
-export default config

@@ -107,7 +107,7 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_standard" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# ── ECS Task Role (S3 Data/Artifacts/Reports) ─────────────────────────────────
+# ── ECS Task Role (no AWS S3 — data lives on Supabase Storage) ────────────────
 resource "aws_iam_role" "ecs_task" {
   name = "${var.project_name}-ecs-task-role"
 
@@ -120,36 +120,6 @@ resource "aws_iam_role" "ecs_task" {
           Service = "ecs-tasks.amazonaws.com"
         }
         Action = "sts:AssumeRole"
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy" "ecs_task_least_privilege" {
-  name = "${var.project_name}-ecs-task-policy"
-  role = aws_iam_role.ecs_task.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "S3BucketListing"
-        Effect = "Allow"
-        Action = [
-          "s3:ListBucket",
-          "s3:GetBucketLocation"
-        ]
-        Resource = var.s3_data_lake_bucket_arn != "" ? var.s3_data_lake_bucket_arn : "*"
-      },
-      {
-        Sid    = "S3DataArtifactsReportsRW"
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject"
-        ]
-        Resource = var.s3_data_lake_bucket_arn != "" ? "${var.s3_data_lake_bucket_arn}/*" : "*"
       }
     ]
   })

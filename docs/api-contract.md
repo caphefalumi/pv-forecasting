@@ -13,7 +13,7 @@
 
 Every HTTP request processed by `apps/backend/main.py` passes through the observability and correlation middleware:
 
-1. **Correlation ID (`X-Request-ID`):** If the caller supplies an `X-Request-ID` header (e.g., from the TanStack Start server function in `apps/frontend/src/lib/api-client.ts`), it is preserved; otherwise, a UUIDv4 identifier is generated.
+1. **Correlation ID (`X-Request-ID`):** If the caller supplies an `X-Request-ID` header (e.g., from the frontend axios client in `apps/frontend/src/lib/api-client.ts`), it is preserved; otherwise, a UUIDv4 identifier is generated.
 2. **Latency Tracking (`X-Process-Time-Ms`):** Request execution duration is measured in high-resolution monotonic time, recorded in the Prometheus histogram `http_request_duration_seconds_bucket`, and returned in the `X-Process-Time-Ms` response header.
 3. **Structured Error Handling:** Unhandled exceptions are caught by the global exception handler, logged with `request_id`, counted in `http_requests_total{status="500"}`, and returned as a sanitized JSON payload without exposing internal stack traces.
 

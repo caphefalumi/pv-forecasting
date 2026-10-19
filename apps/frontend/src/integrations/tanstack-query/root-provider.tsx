@@ -10,7 +10,5 @@ export function getContext() {
     },
   })
 
-  return {
-    queryClient,
-  }
+  return { queryClient }
 }

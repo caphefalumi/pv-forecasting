@@ -12,6 +12,11 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-south-1
+  ALB_NAME: pv-forecasting-alb
 
 jobs:
   deploy:
@@ -23,8 +28,36 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        continue-on-error: true
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-DeployFrontend
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve VITE_BACKEND_API_URL (ALB or env var)
+        id: backend
+        run: |
+          URL="${{ vars.VITE_BACKEND_API_URL }}"
+          if [ -z "$URL" ]; then
+            ALB_DNS=$(aws elbv2 describe-load-balancers \
+              --names "${{ env.ALB_NAME }}" \
+              --query "LoadBalancers[0].DNSName" \
+              --output text \
+              --region "${{ env.AWS_REGION }}" 2>/dev/null || echo "")
+            if [ -n "$ALB_DNS" ] && [ "$ALB_DNS" != "None" ]; then
+              URL="http://${ALB_DNS}"
+            fi
+          fi
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          echo "Resolved VITE_BACKEND_API_URL=${URL:-<empty>}"
+
       - name: Deploy to Vercel
         uses: amondnet/vercel-action@v25
+        env:
+          VITE_BACKEND_API_URL: ${{ steps.backend.outputs.url }}
+          VITE_FRONTEND_ORIGIN: https://pv-forecasting.vercel.app
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}

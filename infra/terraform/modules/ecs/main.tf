@@ -52,10 +52,16 @@ resource "aws_ecs_task_definition" "fastapi" {
       environment = [
         { name = "HOST", value = "0.0.0.0" },
         { name = "PORT", value = "8000" },
+        { name = "CORS_ORIGINS", value = jsonencode(var.cors_origins) },
         { name = "SUPABASE_URL", value = var.supabase_url },
         { name = "SUPABASE_SERVICE_ROLE_KEY", value = var.supabase_service_role_key },
-        { name = "SUPABASE_RAW_DATA_BUCKET", value = "processed_data" },
+        { name = "SUPABASE_RAW_DATA_BUCKET", value = var.supabase_storage_bucket },
         { name = "MLFLOW_TRACKING_URI", value = var.mlflow_tracking_uri },
+        { name = "MLFLOW_S3_ENDPOINT_URL", value = var.supabase_s3_endpoint },
+        { name = "AWS_ACCESS_KEY_ID", value = var.supabase_s3_access_key },
+        { name = "AWS_SECRET_ACCESS_KEY", value = var.supabase_s3_secret_key },
+        { name = "AWS_DEFAULT_REGION", value = var.aws_region },
+        { name = "AWS_ENDPOINT_URL_S3", value = var.supabase_s3_endpoint },
         { name = "OTEL_EXPORTER_OTLP_PROTOCOL", value = var.otel_exporter_otlp_protocol },
         { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = var.otel_exporter_otlp_endpoint },
         { name = "OTEL_EXPORTER_OTLP_HEADERS", value = var.otel_exporter_otlp_headers },
@@ -139,7 +145,7 @@ resource "aws_ecs_task_definition" "mlflow" {
         "--port",
         "5000",
         "--default-artifact-root",
-        "${var.s3_bucket_uri}/artifacts"
+        var.mlflow_artifact_root
       ]
 
       portMappings = [
@@ -151,7 +157,12 @@ resource "aws_ecs_task_definition" "mlflow" {
       ]
 
       environment = [
-        { name = "MLFLOW_BACKEND_STORE_URI", value = var.mlflow_tracking_uri }
+        { name = "MLFLOW_BACKEND_STORE_URI", value = var.mlflow_tracking_uri },
+        { name = "MLFLOW_S3_ENDPOINT_URL", value = var.supabase_s3_endpoint },
+        { name = "AWS_ACCESS_KEY_ID", value = var.supabase_s3_access_key },
+        { name = "AWS_SECRET_ACCESS_KEY", value = var.supabase_s3_secret_key },
+        { name = "AWS_DEFAULT_REGION", value = var.aws_region },
+        { name = "AWS_ENDPOINT_URL_S3", value = var.supabase_s3_endpoint }
       ]
 
       logConfiguration = {

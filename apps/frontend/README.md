@@ -1,13 +1,13 @@
 # PV Solar Forecast Frontend (`apps/frontend`)
 
-Client-facing web application for Day-Ahead (D+1) 24-hour photovoltaic solar energy forecasting, built with **TanStack Start**, **React 19**, **TypeScript**, and **Tailwind CSS v4**, deployed on **Vercel**.
+Client-facing web application for Day-Ahead (D+1) 24-hour photovoltaic solar energy forecasting, built with **React 19**, **TanStack Router / Query / Form**, **TypeScript**, and **Tailwind CSS v4**, deployed on **Vercel** as a static SPA.
 
 ---
 
 ## 1. Architecture & Features
 
-- **Framework:** TanStack Start + TanStack Router (file-based SSR routing) + React 19 + Vite 8.
-- **Server Functions (`src/lib/api-client.ts`):** Type-safe `createServerFn` RPC bridge (`getForecastServerFn`) forwarding validated user array specifications to the FastAPI backend (`BACKEND_API_URL` / AWS Application Load Balancer) with a 10-second timeout and `X-Request-ID` correlation tracing.
+- **Stack:** Vite + React 19 SPA, TanStack Router (file-based), TanStack Query, TanStack Form, Tailwind CSS v4.
+- **API client (`src/lib/api-client.ts`):** Axios `getForecast` posts validated array specs to FastAPI (`/api/v1/forecast`) with a 10-second timeout and `X-Request-ID` correlation tracing. Local Vite proxies `/api` → `http://127.0.0.1:8000`; production uses `VITE_BACKEND_API_URL` (ALB).
 - **Domain Validation & Calculations (`src/lib/forecast-utils.ts`):** Pure TypeScript domain functions enforcing physical boundaries (`kwp`, `tilt_deg`, `surface_azimuth_pvlib`, `technology`, `tracking`) and computing specific yield ($\text{kWh}/\text{kWp}$), peak hour, and daily totals.
 - **Interactive Forecast Dashboard (`src/routes/index.tsx`):**
   - Configurable PV array form (capacity in kWp, 7 cell technologies, 3 tracking modes, tilt, azimuth, request date).
@@ -21,32 +21,32 @@ Client-facing web application for Day-Ahead (D+1) 24-hour photovoltaic solar ene
 
 ```text
 apps/frontend/
+├── index.html
 ├── package.json
 ├── tsconfig.json
 ├── vercel.json
 ├── vite.config.ts
 ├── src/
+│   ├── main.tsx                 # SPA entry (RouterProvider + QueryClient)
 │   ├── components/
-│   │   ├── Header.tsx             # Primary navigation & theme toggle
-│   │   ├── Footer.tsx             # Attribution footer
-│   │   └── ThemeToggle.tsx        # Light / dark / system mode switch
+│   │   ├── Header.tsx
+│   │   ├── Footer.tsx
+│   │   └── ThemeToggle.tsx
 │   ├── integrations/
-│   │   └── tanstack-query/        # QueryClient provider & devtools
+│   │   └── tanstack-query/      # QueryClient factory
 │   ├── lib/
-│   │   ├── api-client.ts          # TanStack Start server function -> FastAPI
-│   │   └── forecast-utils.ts      # Pure domain validation & PV yield math
+│   │   ├── api-client.ts        # Browser → FastAPI axios client
+│   │   └── forecast-utils.ts
 │   ├── routes/
-│   │   ├── __root.tsx             # HTML shell, SEO meta, 404 boundary
-│   │   ├── index.tsx              # Day-Ahead (D+1) Forecast dashboard
-│   │   └── about.tsx              # System Architecture & MLOps overview
-│   ├── router.tsx                 # Router initialization
-│   ├── routeTree.gen.ts           # Auto-generated route tree
-│   └── styles.css                 # Tailwind CSS v4 design tokens
+│   │   ├── __root.tsx
+│   │   ├── index.tsx
+│   │   └── about.tsx
+│   ├── router.tsx
+│   ├── routeTree.gen.ts
+│   └── styles.css
 └── tests/
     ├── unit/
-    │   └── forecast-utils.test.ts # Domain validation & calculation unit tests
     └── integration/
-        └── api-contract.test.ts   # D+1 API contract & error formatting tests
 ```
 
 ---
@@ -56,16 +56,16 @@ apps/frontend/
 ```bash
 cd apps/frontend
 
-# Start development server on http://localhost:3000
+# Start Vite on http://localhost:3000 (/api proxied to FastAPI :8000)
 bun run dev
 
 # Run unit and integration tests (bun:test)
 bun run test
 
-# Type-check TypeScript strictly
+# Type-check
 bun x tsc --noEmit
 
-# Build production SSR & client bundles
+# Production static build → dist/
 bun run build
 ```
 
@@ -73,4 +73,4 @@ bun run build
 
 | Variable | Default | Description |
 |---|---|---|
-| `BACKEND_API_URL` | `http://127.0.0.1:8000` | Base URL of the FastAPI service (local or AWS ALB DNS) |
+| `VITE_BACKEND_API_URL` | _(empty; Vite proxy)_ | FastAPI base URL for production (AWS ALB). Leave unset locally. |

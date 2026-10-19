@@ -59,7 +59,7 @@ The platform is an end-to-end MLOps system that forecasts the 24-hour solar phot
 - **Champion / Challenger Lifecycle:** Newly trained models are evaluated against the active `@champion` and tested on behavioral golden sets. Qualifying models receive the `@candidate` alias and require human approval (`promote-model.yml` / `python promote.py`) before transitioning to `@champion`.
 
 ### 2.3 Prediction Serving (`apps/backend/` & `apps/frontend/`)
-- **Frontend (`apps/frontend/`):** TanStack Start + React 19 web portal hosted on Vercel. Users input their array parameters (`kwp`, `technology`, `tracking`, `tilt_deg`, `surface_azimuth_pvlib`, `predict_date`) and view the 24-hour D+1 generation curve, peak hour, specific yield ($\text{kWh}/\text{kWp}$), and daily total.
+- **Frontend (`apps/frontend/`):** React 19 + TanStack Router/Query/Form SPA hosted on Vercel. Users input their array parameters (`kwp`, `technology`, `tracking`, `tilt_deg`, `surface_azimuth_pvlib`, `predict_date`) and view the 24-hour D+1 generation curve, peak hour, specific yield ($\text{kWh}/\text{kWp}$), and daily total.
 - **Public Entry Point (`infra/terraform/modules/alb/`):** AWS Application Load Balancer in the public subnet is the sole internet-facing entry point, forwarding traffic to port `8000` in the private subnet.
 - **Backend (`apps/backend/`):** FastAPI service running on ECS Fargate (`solar-api`). Fetches the D+1 weather forecast from Open-Meteo, builds the 24-hour feature tensor, runs batch daytime inference (`06:00–18:00`) using the active `@champion` model, checks for Out-of-Distribution (`is_ood`) inputs, and logs every prediction to Supabase `prediction_logs`.
 

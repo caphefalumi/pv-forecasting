@@ -51,8 +51,33 @@ variable "supabase_service_role_key" {
 
 variable "pv_s3_uri" {
   type        = string
-  description = "S3 URI for PV data lake synchronization"
-  default     = "s3://pv-forecasting-data/lake"
+  description = "Supabase S3 URI for PV data (e.g. s3://processed_data)"
+  default     = "s3://processed_data"
+}
+
+variable "supabase_storage_bucket" {
+  type        = string
+  description = "Supabase Storage bucket name"
+  default     = "processed_data"
+}
+
+variable "supabase_s3_endpoint" {
+  type        = string
+  description = "Supabase S3-compatible endpoint URL"
+}
+
+variable "supabase_s3_access_key" {
+  type        = string
+  description = "Supabase S3 access key"
+  sensitive   = true
+  default     = ""
+}
+
+variable "supabase_s3_secret_key" {
+  type        = string
+  description = "Supabase S3 secret key"
+  sensitive   = true
+  default     = ""
 }
 
 variable "otel_exporter_otlp_protocol" {

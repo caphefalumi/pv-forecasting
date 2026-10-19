@@ -74,26 +74,13 @@ jobs:
           cd apps/frontend
           bun run build
 
-  infra-and-ansible-checks:
-    name: Infrastructure Linting & Ansible Architecture Verification
+  terraform-checks:
+    name: Terraform Format & Validate
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Setup Python for Ansible
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install Ansible Core
-        run: |
-          pip install --no-cache-dir ansible-core
-
-      - name: Run Ansible Architecture Verification Playbook
-        run: |
-          ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbook.yml
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3

@@ -12,7 +12,7 @@ import {
   Clock,
   TrendingUp,
 } from 'lucide-react'
-import { getForecastServerFn } from '../lib/api-client'
+import { getForecast } from '../lib/api-client'
 import {
   type ArrayParameters,
   type ForecastResponse,
@@ -49,7 +49,7 @@ function PVForecastPage() {
       tracking: 'fixed',
       tilt_deg: 20.0,
       surface_azimuth_pvlib: 0.0,
-      predict_date: new Date().toISOString().split('T')[0],
+      predict_date: new Date().toISOString().slice(0, 10),
     } satisfies ArrayParameters,
     onSubmit: async ({ value }) => {
       setError(null)
@@ -60,9 +60,7 @@ function PVForecastPage() {
       }
 
       try {
-        const data = await getForecastServerFn({
-          data: value,
-        })
+        const data = await getForecast(value)
         setResult(data)
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Error executing forecast')

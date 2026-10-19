@@ -44,7 +44,7 @@ function About() {
               3. Zero-Downtime Cloud Serving
             </div>
             <p className="mt-2 text-xs leading-6 text-[var(--sea-ink-soft)]">
-              Requests flow from this Vercel-hosted TanStack Start UI through an AWS Application Load Balancer in the public subnet to the FastAPI inference service on ECS Fargate in the private subnet. Every prediction is logged to Supabase with model lineage.
+              Requests flow from this Vercel-hosted React SPA through an AWS Application Load Balancer to the FastAPI inference service on ECS Fargate. Every prediction is logged to Supabase with model lineage.
             </p>
           </div>
 

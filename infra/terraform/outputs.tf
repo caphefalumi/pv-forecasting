@@ -3,6 +3,11 @@ output "alb_dns_name" {
   value       = "http://${module.alb.alb_dns_name}"
 }
 
+output "frontend_origin" {
+  description = "Primary production frontend origin (Vercel)"
+  value       = var.frontend_origin
+}
+
 output "ecr_repository_url" {
   description = "ECR Repository URL for pushing FastAPI images"
   value       = module.ecr.backend_repository_url
@@ -53,12 +58,17 @@ output "pipeline_dlq_arn" {
   value       = module.pipeline_scheduler.pipeline_dlq_arn
 }
 
-output "s3_data_lake_bucket" {
-  description = "S3 Data Lake Bucket Name (data/, artifacts/, reports/)"
-  value       = module.storage.bucket_name
+output "supabase_storage_bucket" {
+  description = "Supabase Storage bucket used as the data lake (S3-compatible)"
+  value       = var.supabase_storage_bucket
 }
 
-output "s3_data_lake_uri" {
-  description = "S3 URI for PV Data Lake"
-  value       = module.storage.bucket_uri
+output "supabase_s3_uri" {
+  description = "s3:// URI pointing at Supabase Storage"
+  value       = "s3://${var.supabase_storage_bucket}"
+}
+
+output "supabase_s3_endpoint" {
+  description = "Supabase S3-compatible endpoint"
+  value       = var.supabase_s3_endpoint
 }

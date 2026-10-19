@@ -1,5 +1,4 @@
 import axios, { AxiosError } from 'axios'
-import { createServerFn } from '@tanstack/react-start'
 import {
   type ArrayParameters,
   type ForecastResponse,
@@ -8,6 +7,8 @@ import {
 } from './forecast-utils'
 
 export const apiClient = axios.create({
+  // Empty in local Vite (proxy /api → FastAPI). Set VITE_BACKEND_API_URL for prod ALB.
+  baseURL: (import.meta.env.VITE_BACKEND_API_URL || '').replace(/\/$/, ''),
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -15,7 +16,6 @@ export const apiClient = axios.create({
 })
 
 apiClient.interceptors.request.use((config) => {
-  config.baseURL = (process.env.BACKEND_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')
   config.headers.set('X-Request-ID', config.headers.get('X-Request-ID') || crypto.randomUUID())
   return config
 })
@@ -47,15 +47,11 @@ apiClient.interceptors.response.use(
   },
 )
 
-export const getForecastServerFn = createServerFn({ method: 'POST' })
-  .validator((data: ArrayParameters) => {
-    const check = validateArrayParameters(data)
-    if (!check.valid) {
-      throw new Error(check.errors.join(' '))
-    }
-    return data
-  })
-  .handler(async ({ data }): Promise<ForecastResponse> => {
-    const res = await apiClient.post<ForecastResponse>('/api/v1/forecast', data)
-    return res.data
-  })
+export async function getForecast(params: ArrayParameters): Promise<ForecastResponse> {
+  const check = validateArrayParameters(params)
+  if (!check.valid) {
+    throw new Error(check.errors.join(' '))
+  }
+  const res = await apiClient.post<ForecastResponse>('/api/v1/forecast', params)
+  return res.data
+}

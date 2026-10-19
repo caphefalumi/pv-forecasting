@@ -16,8 +16,6 @@
     "test:unit": "bun run --cwd apps/frontend test:unit && cd apps/backend && uv run pytest tests/unit -v",
     "test:integration": "bun run --cwd apps/frontend test:integration && cd apps/backend && uv run pytest tests/integration -v",
     "test": "bun run test:unit && bun run test:integration",
-    "smoke": "python infra/ansible/run_smoke.py",
-    "smoke:ansible": "ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbook.yml",
     "tf:validate": "cd infra/terraform && terraform validate",
     "tf:fmt": "cd infra/terraform && terraform fmt -recursive"
   },
