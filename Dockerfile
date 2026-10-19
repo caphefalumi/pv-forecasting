@@ -34,7 +34,8 @@ COPY --chown=appuser:appuser config/ ./config/
 COPY --chown=appuser:appuser scripts/ ./scripts/
 COPY --chown=appuser:appuser ingest.py evaluate.py drift.py retrain.py promote.py ./
 
-RUN chmod +x scripts/run_weekly.sh
+RUN chmod +x scripts/run_weekly.sh && \
+    chown appuser:appuser /app
 
 USER appuser
 
