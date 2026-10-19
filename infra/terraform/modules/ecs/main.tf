@@ -185,6 +185,9 @@ resource "aws_ecs_task_definition" "mlflow" {
 
       environment = [
         { name = "MLFLOW_BACKEND_STORE_URI", value = var.mlflow_tracking_uri },
+        # MLflow 3.x starts ~7 huey job-executor consumers (~1 GB RSS) for server-side GenAI jobs,
+        # which this project does not use; they OOM-kill the 1 GB task.
+        { name = "MLFLOW_SERVER_ENABLE_JOB_EXECUTION", value = "false" },
         { name = "MLFLOW_S3_ENDPOINT_URL", value = var.supabase_s3_endpoint },
         { name = "AWS_ACCESS_KEY_ID", value = var.supabase_s3_access_key },
         { name = "AWS_SECRET_ACCESS_KEY", value = var.supabase_s3_secret_key },
