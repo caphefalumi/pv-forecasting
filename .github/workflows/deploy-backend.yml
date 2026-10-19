@@ -1,19 +1,19 @@
-name: Deploy Backend Service
+name: Deploy Backend
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [master]
     paths:
       - "apps/backend/**"
       - ".github/workflows/deploy-backend.yml"
   workflow_dispatch:
 
 permissions:
-  id-token: write   # Required for AWS OIDC authentication
   contents: read
-  actions: write
+
+concurrency:
+  group: deploy-backend-prod
+  cancel-in-progress: false
 
 env:
   AWS_REGION: ap-south-1
@@ -24,18 +24,22 @@ env:
 
 jobs:
   build-and-deploy:
-    name: Build Multi-Stage Image & Rolling Deploy to ECS Fargate
+    name: build-and-deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment: prod
+    permissions:
+      contents: read
+      id-token: write # AWS OIDC
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Configure AWS Credentials via OIDC
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
@@ -46,7 +50,7 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and Push Docker Image
+      - name: Build and push image
         uses: docker/build-push-action@v5
         with:
           context: ./apps/backend
@@ -58,46 +62,43 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Deploy to Amazon ECS Fargate (Rolling Update)
+      - name: Rolling deploy to ECS Fargate
         run: |
-          echo "Updating ECS service with new image..."
           aws ecs update-service \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --service ${{ env.ECS_SERVICE }} \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
             --force-new-deployment \
-            --region ${{ env.AWS_REGION }}
+            --region "$AWS_REGION" \
+            --query "service.deployments[0].id" --output text
 
-      - name: Await ECS Deployment Stability
+      - name: Wait for ECS service to be stable
         run: |
-          echo "Waiting for rolling deployment to reach stable state..."
           aws ecs wait services-stable \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --services ${{ env.ECS_SERVICE }} \
-            --region ${{ env.AWS_REGION }}
-          echo "Deployment successful."
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --region "$AWS_REGION"
 
-      - name: Post-deploy /health check + publish ALB URL
+      - name: Post-deploy /health check
         env:
-          GH_TOKEN: ${{ github.token }}
+          API_URL: ${{ vars.VITE_BACKEND_API_URL }}
         run: |
-          ALB_DNS=$(aws elbv2 describe-load-balancers \
-            --names ${{ env.ALB_NAME }} \
-            --query "LoadBalancers[0].DNSName" \
-            --output text \
-            --region ${{ env.AWS_REGION }} || echo "")
-
-          if [ -n "$ALB_DNS" ] && [ "$ALB_DNS" != "None" ]; then
-            ALB_URL="http://${ALB_DNS}"
-            gh variable set VITE_BACKEND_API_URL --env prod --body "$ALB_URL" --repo "$GITHUB_REPOSITORY" || true
-            echo "Checking ${ALB_URL}/health"
-            for i in 1 2 3 4 5; do
-              if curl -fsS "${ALB_URL}/health"; then
-                echo "Health check OK"
-                exit 0
-              fi
-              sleep 5
-            done
-            echo "Warning: ALB health check did not succeed; service may still be starting."
-          else
-            echo "Warning: Could not resolve ALB DNS; skipping health check."
+          BASE_URL="${API_URL%/}"
+          if [ -z "$BASE_URL" ]; then
+            ALB_DNS=$(aws elbv2 describe-load-balancers \
+              --names "$ALB_NAME" \
+              --query "LoadBalancers[0].DNSName" \
+              --output text \
+              --region "$AWS_REGION")
+            BASE_URL="http://${ALB_DNS}"
           fi
+          echo "Checking ${BASE_URL}/health"
+          for _ in $(seq 1 12); do
+            if curl -fsSL --max-time 10 "${BASE_URL}/health"; then
+              echo
+              echo "Health check OK"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::${BASE_URL}/health did not become healthy after deploy"
+          exit 1

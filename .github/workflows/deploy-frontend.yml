@@ -1,75 +1,87 @@
-name: Deploy Frontend to Vercel
+name: Deploy Frontend
 
 on:
   push:
-    branches:
-      - master
-      - main
+    branches: [master]
     paths:
       - "apps/frontend/**"
+      - "package.json"
+      - "bun.lock"
       - ".github/workflows/deploy-frontend.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write
+
+concurrency:
+  group: deploy-frontend-prod
+  cancel-in-progress: false
 
 env:
-  AWS_REGION: ap-south-1
-  ALB_NAME: pv-forecasting-alb
+  BUN_VERSION: "1.3.12"
+  VERCEL_CLI_VERSION: "64.5.0"
 
 jobs:
   deploy:
-    name: Deploy frontend (prod)
+    name: deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment: prod
     defaults:
       run:
         working-directory: apps/frontend
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
-        continue-on-error: true
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          role-session-name: GitHubActions-DeployFrontend
-          aws-region: ${{ env.AWS_REGION }}
+          bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Resolve VITE_BACKEND_API_URL (Cloudflare API domain, env, or ALB)
+      - name: Cache Bun packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Resolve VITE_BACKEND_API_URL
         id: backend
-        working-directory: .
-        run: |
-          URL="${{ vars.VITE_BACKEND_API_URL }}"
-          if [ -z "$URL" ]; then
-            URL="${{ vars.API_DOMAIN }}"
-            if [ -n "$URL" ] && [[ "$URL" != https://* ]]; then
-              URL="https://${URL}"
-            fi
-          fi
-          if [ -z "$URL" ]; then
-            ALB_DNS=$(aws elbv2 describe-load-balancers \
-              --names "${{ env.ALB_NAME }}" \
-              --query "LoadBalancers[0].DNSName" \
-              --output text \
-              --region "${{ env.AWS_REGION }}" 2>/dev/null || echo "")
-            if [ -n "$ALB_DNS" ] && [ "$ALB_DNS" != "None" ]; then
-              URL="http://${ALB_DNS}"
-            fi
-          fi
-          echo "url=${URL}" >> "$GITHUB_OUTPUT"
-          echo "Resolved VITE_BACKEND_API_URL=${URL:-<empty>}"
-
-      - name: Deploy to Vercel (prod)
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          VITE_BACKEND_API_URL: ${{ steps.backend.outputs.url }}
-          VITE_FRONTEND_ORIGIN: https://pv-forecasting.vercel.app
+          BACKEND_URL: ${{ vars.VITE_BACKEND_API_URL }}
+          API_DOMAIN: ${{ vars.API_DOMAIN }}
         run: |
-          npx --yes vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
-          npx --yes vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN"
+          URL="$BACKEND_URL"
+          if [ -z "$URL" ] && [ -n "$API_DOMAIN" ]; then
+            case "$API_DOMAIN" in
+              https://*) URL="$API_DOMAIN" ;;
+              *) URL="https://${API_DOMAIN}" ;;
+            esac
+          fi
+          if [ -z "$URL" ]; then
+            echo "::error::Set the VITE_BACKEND_API_URL (or API_DOMAIN) variable on the prod environment"
+            exit 1
+          fi
+          echo "url=${URL%/}" >> "$GITHUB_OUTPUT"
+          echo "VITE_BACKEND_API_URL=${URL%/}"
+
+      - name: Pull Vercel project settings
+        run: npx --yes "vercel@${VERCEL_CLI_VERSION}" pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build (prebuilt, bakes in VITE_BACKEND_API_URL)
+        env:
+          VITE_BACKEND_API_URL: ${{ steps.backend.outputs.url }}
+          VITE_FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+        run: npx --yes "vercel@${VERCEL_CLI_VERSION}" build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy prebuilt output to Vercel (prod)
+        run: npx --yes "vercel@${VERCEL_CLI_VERSION}" deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN"

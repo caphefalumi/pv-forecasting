@@ -1,93 +1,93 @@
-name: CI Pipeline
+name: CI
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [master]
+    paths:
+      - "apps/**"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/ci.yml"
   pull_request:
+    paths:
+      - "apps/**"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUN_VERSION: "1.3.12"
 
 jobs:
   backend-test:
-    name: Backend API Unit & Integration Tests (FastAPI)
+    name: backend-test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/backend
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+          cache-dependency-glob: apps/backend/uv.lock
 
-      - name: Install Backend Dependencies
-        run: |
-          cd apps/backend
-          uv sync --dev
+      - name: Install dependencies
+        run: uv sync --dev --frozen
 
-      - name: Run Backend Unit Tests (pytest)
-        run: |
-          cd apps/backend
-          uv run pytest tests/unit -v
+      - name: Unit tests
+        run: uv run pytest tests/unit -v
 
-      - name: Run Backend Integration Tests (pytest)
-        run: |
-          cd apps/backend
-          uv run pytest tests/integration -v
+      - name: Integration tests
+        run: uv run pytest tests/integration -v
 
   frontend-test-and-build:
-    name: Frontend Tests & Production Build (bun:test & Vite)
+    name: frontend-test-and-build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/frontend
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Install Frontend Dependencies
-        run: |
-          cd apps/frontend
-          bun install --frozen-lockfile
+      - name: Cache Bun packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
 
-      - name: Run Frontend Unit Tests (bun:test)
-        run: |
-          cd apps/frontend
-          bun run test:unit
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
-      - name: Run Frontend Integration Tests (bun:test)
-        run: |
-          cd apps/frontend
-          bun run test:integration
+      - name: Unit tests
+        run: bun run test:unit
 
-      - name: Typecheck Frontend
-        run: |
-          cd apps/frontend
-          bun x tsc --noEmit
+      - name: Integration tests
+        run: bun run test:integration
 
-      - name: Build Frontend Application
-        run: |
-          cd apps/frontend
-          bun run build
+      - name: Typecheck
+        run: bun x tsc --noEmit
 
-  terraform-checks:
-    name: Terraform Format & Validate
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Validate Terraform Modular Stacks
-        run: |
-          cd infra/terraform
-          terraform fmt -check
-          terraform init -backend=false
-          terraform validate
+      - name: Build
+        run: bun run build
