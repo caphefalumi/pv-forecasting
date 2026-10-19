@@ -77,6 +77,7 @@ module "ecs" {
   ecs_security_group_id       = module.security.ecs_security_group_id
   target_group_arn            = module.alb.target_group_arn
   ecr_repository_url          = module.ecr.backend_repository_url
+  mlflow_ecr_repository_url   = module.ecr.mlflow_repository_url
   ecs_execution_role_arn      = module.iam.ecs_execution_role_arn
   ecs_task_role_arn           = module.iam.ecs_task_role_arn
   supabase_url                = var.supabase_url

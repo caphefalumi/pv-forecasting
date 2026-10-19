@@ -28,6 +28,11 @@ variable "ecr_repository_url" {
   description = "ECR repository URL for backend container image"
 }
 
+variable "mlflow_ecr_repository_url" {
+  type        = string
+  description = "ECR repository URL for the MLflow tracking server image (infra/docker/mlflow)"
+}
+
 variable "ecs_execution_role_arn" {
   type        = string
   description = "ARN of ECS Execution Role"

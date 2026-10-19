@@ -159,7 +159,7 @@ resource "aws_ecs_task_definition" "mlflow" {
   container_definitions = jsonencode([
     {
       name      = "mlflow-server"
-      image     = "${var.ecr_repository_url}:latest"
+      image     = "${var.mlflow_ecr_repository_url}:latest"
       essential = true
       command = [
         "mlflow",
@@ -197,6 +197,15 @@ resource "aws_ecs_task_definition" "mlflow" {
           "awslogs-stream-prefix" = "mlflow"
         }
       }
+
+      # The image has no curl; MLflow serves GET /health -> "OK".
+      healthCheck = {
+        command     = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=4)\" || exit 1"]
+        interval    = 30
+        timeout     = 5
+        retries     = 3
+        startPeriod = 60
+      }
     }
   ])
 }
@@ -212,5 +221,10 @@ resource "aws_ecs_service" "mlflow" {
     subnets          = var.private_subnet_ids
     security_groups  = [var.ecs_security_group_id]
     assign_public_ip = true # default VPC public subnets; no NAT Gateway
+  }
+
+  # Runtime count is changed manually (0 idle / 1 when needed); TF only sets the initial value.
+  lifecycle {
+    ignore_changes = [desired_count]
   }
 }
