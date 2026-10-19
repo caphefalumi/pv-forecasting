@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Model accuracy (nMAE across 31 arrays & 6 held-out cold-start arrays), error attribution (e_model vs e_forecast), Evidently feature drift scores, and ingestion data quality checks.",
+  "description": "Champion accuracy from the daily evaluation job (live RMSE, ratio to train-time test RMSE, retrain decision), KS / PSI data drift from the daily drift job, ingestion data quality, batch job health and the weekly retrain. All values are pushed by the batch jobs over OTLP; panels read 'No data' until a job has run.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -44,7 +44,7 @@
       },
       "id": 100,
       "panels": [],
-      "title": "Executive KPIs — Model Accuracy, Cold-Start, Drift & OOD Traffic",
+      "title": "Executive KPIs — Champion Accuracy, Retrain Decision, Drift & OOD Traffic",
       "type": "row"
     },
     {
@@ -52,7 +52,7 @@
         "type": "prometheus",
         "uid": "grafanacloud-prom"
       },
-      "description": "Normalised Mean Absolute Error (nMAE) across all 31 DKASC reference arrays. Alert triggers if > threshold for 3 consecutive days.",
+      "description": "pv_eval_rmse_ratio from the daily solar-evaluate job (03:00 UTC): live RMSE on the 500 most recent rows divided by the champion's test RMSE. Retrain is flagged above 1.15 (EVAL_DRIFT_THRESHOLD). With no champion baseline the job uses an absolute live-RMSE limit of 0.15 instead and this ratio is not reported.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -64,19 +64,17 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
-              },
-              {
-                "color": "yellow",
-                "value": 0.08
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
-                "value": 0.12
+                "value": 1.15
               }
             ]
           },
-          "unit": "percentunit"
+          "unit": "none",
+          "noValue": "No data yet"
         },
         "overrides": []
       },
@@ -89,7 +87,7 @@
       "id": 1,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
@@ -107,12 +105,12 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "pv_model_nmae{cohort=\"all\"}",
-          "legendFormat": "Fleet nMAE (All 31 Arrays)",
+          "expr": "last_over_time(pv_eval_rmse_ratio{service=\"solar-evaluate\"}[2d])",
+          "legendFormat": "live / champion",
           "refId": "A"
         }
       ],
-      "title": "Champion Model nMAE (Fleet)",
+      "title": "Champion RMSE Ratio (live / train-time test)",
       "type": "stat"
     },
     {
@@ -120,31 +118,45 @@
         "type": "prometheus",
         "uid": "grafanacloud-prom"
       },
-      "description": "nMAE on the 6 held-out reference arrays never seen during training (east/west panels, 3 cell technologies). Estimates cold-start error for new user arrays.",
+      "description": "pv_eval_needs_retrain from solar-evaluate: 1 when the ratio is above 1.15, or live RMSE above 0.15 when there is no champion baseline. Same decision as evaluate.py exit code 2.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 3,
-          "mappings": [],
+          "decimals": 0,
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "No",
+                  "color": "green",
+                  "index": 0
+                },
+                "1": {
+                  "text": "RETRAIN NEEDED",
+                  "color": "red",
+                  "index": 1
+                }
+              }
+            }
+          ],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
-              },
-              {
-                "color": "yellow",
-                "value": 0.09
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
-                "value": 0.14
+                "value": 1
               }
             ]
           },
-          "unit": "percentunit"
+          "unit": "none",
+          "noValue": "No data yet"
         },
         "overrides": []
       },
@@ -157,7 +169,7 @@
       "id": 2,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
@@ -175,12 +187,12 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "pv_model_nmae{cohort=\"held_out_6\"}",
-          "legendFormat": "Held-Out 6 Arrays nMAE",
+          "expr": "last_over_time(pv_eval_needs_retrain{service=\"solar-evaluate\"}[2d])",
+          "legendFormat": "needs retrain",
           "refId": "A"
         }
       ],
-      "title": "6 Held-Out Cold-Start Arrays nMAE",
+      "title": "Retrain Needed (latest daily eval)",
       "type": "stat"
     },
     {
@@ -188,31 +200,29 @@
         "type": "prometheus",
         "uid": "grafanacloud-prom"
       },
-      "description": "Evidently covariate drift score (PSI / KS test). Diagnostic only — seasonal weather shifts do not trigger retraining on their own.",
+      "description": "drift_score{feature=\"all\"} from the daily solar-drift job (04:00 UTC): share of features whose two-sample KS test drifted (p < 0.05), last 7 days vs preceding 30 days, daytime rows. Drift is flagged at 0.40 or above (DRIFT_KS_THRESHOLD).",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
-          "decimals": 3,
+          "decimals": 1,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue"
+                "color": "green",
+                "value": null
               },
               {
-                "color": "yellow",
-                "value": 0.2
-              },
-              {
-                "color": "orange",
-                "value": 0.35
+                "color": "red",
+                "value": 0.4
               }
             ]
           },
-          "unit": "short"
+          "unit": "percentunit",
+          "noValue": "No data yet"
         },
         "overrides": []
       },
@@ -225,7 +235,7 @@
       "id": 3,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
@@ -243,12 +253,12 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "avg(drift_score{site=\"dkasc\"})",
-          "legendFormat": "Mean Feature Drift Score",
+          "expr": "last_over_time(drift_score{feature=\"all\",service=\"solar-drift\"}[2d])",
+          "legendFormat": "drift score",
           "refId": "A"
         }
       ],
-      "title": "Evidently Covariate Drift Score",
+      "title": "KS Drift Score (share of features drifted)",
       "type": "stat"
     },
     {
@@ -329,7 +339,7 @@
       },
       "id": 101,
       "panels": [],
-      "title": "Model Accuracy, Error Attribution & Feature Drift",
+      "title": "Model Accuracy & Feature Drift",
       "type": "row"
     },
     {
@@ -337,20 +347,40 @@
         "type": "prometheus",
         "uid": "grafanacloud-prom"
       },
-      "description": "Tracks daily nMAE across all 31 arrays, the 25 training arrays, and the 6 held-out cold-start arrays. Retraining triggers if nMAE exceeds threshold for 3 consecutive days.",
+      "description": "pv_eval_rmse_ratio per daily evaluation, labelled by champion version. Dashed line = 1.15 retrain threshold. (When no champion baseline exists the job compares live RMSE against an absolute 0.15 instead; see the next panel.)",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisLabel": "nMAE (Normalized by kWp)",
+            "axisLabel": "live RMSE / test RMSE",
             "drawStyle": "line",
-            "fillOpacity": 15,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2
+            "fillOpacity": 10,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "showPoints": "always",
+            "pointSize": 5,
+            "spanNulls": false,
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
           },
-          "unit": "percentunit"
+          "unit": "none",
+          "decimals": 3,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1.15
+              }
+            ]
+          }
         },
         "overrides": []
       },
@@ -361,36 +391,29 @@
         "y": 7
       },
       "id": 5,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "pv_model_nmae{cohort=\"all\"}",
-          "legendFormat": "All Arrays (31)",
+          "expr": "last_over_time(pv_eval_rmse_ratio{service=\"solar-evaluate\"}[26h])",
+          "legendFormat": "ratio (champion v{{champion_version}})",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "grafanacloud-prom"
-          },
-          "expr": "pv_model_nmae{cohort=\"train_25\"}",
-          "legendFormat": "Training Arrays (25)",
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "grafanacloud-prom"
-          },
-          "expr": "pv_model_nmae{cohort=\"held_out_6\"}",
-          "legendFormat": "Held-Out Cold-Start Arrays (6)",
-          "refId": "C"
         }
       ],
-      "title": "Daily nMAE: Fleet vs. 6 Held-Out Reference Arrays",
+      "title": "Daily RMSE Ratio: live / champion test",
       "type": "timeseries"
     },
     {
@@ -398,20 +421,40 @@
         "type": "prometheus",
         "uid": "grafanacloud-prom"
       },
-      "description": "Separates total prediction error into Model Error (e_model, fixable by retraining) and Weather Forecast Error (e_forecast, Open-Meteo deviation from observed station weather).",
+      "description": "Champion error on the latest evaluation window (target_norm units) next to the RMSE it scored on its test split at training time. Dashed line = 0.15, the absolute live-RMSE fallback used only when no champion baseline exists.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisLabel": "Error (kWh / kWp)",
+            "axisLabel": "target_norm error",
             "drawStyle": "line",
-            "fillOpacity": 20,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2
+            "fillOpacity": 10,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "showPoints": "always",
+            "pointSize": 5,
+            "spanNulls": false,
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
           },
-          "unit": "kwatth"
+          "unit": "none",
+          "decimals": 4,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.15
+              }
+            ]
+          }
         },
         "overrides": []
       },
@@ -422,14 +465,25 @@
         "y": 7
       },
       "id": 6,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "pv_error_attribution_kwh{source=\"e_model\"}",
-          "legendFormat": "e_model (Model Mapping Error — Drives Retrain)",
+          "expr": "last_over_time(pv_eval_live_rmse{service=\"solar-evaluate\"}[26h])",
+          "legendFormat": "live RMSE (v{{champion_version}})",
           "refId": "A"
         },
         {
@@ -437,12 +491,21 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "pv_error_attribution_kwh{source=\"e_forecast\"}",
-          "legendFormat": "e_forecast (Open-Meteo Weather Error — Upstream)",
+          "expr": "last_over_time(pv_eval_live_mae{service=\"solar-evaluate\"}[26h])",
+          "legendFormat": "live MAE (v{{champion_version}})",
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "last_over_time(pv_eval_champion_test_rmse{service=\"solar-evaluate\"}[26h])",
+          "legendFormat": "champion test RMSE (v{{champion_version}})",
+          "refId": "C"
         }
       ],
-      "title": "Error Attribution: e_model vs. e_forecast",
+      "title": "Live RMSE & MAE vs Champion Test RMSE",
       "type": "timeseries"
     },
     {
@@ -450,20 +513,24 @@
         "type": "prometheus",
         "uid": "grafanacloud-prom"
       },
-      "description": "Per-feature PSI and Kolmogorov-Smirnov drift scores computed daily at 04:00 by the Evidently job (solar-drift) against the rolling reference window.",
+      "description": "pv_drift_feature_ks_stat{feature}: two-sample KS statistic per model input feature, current 7-day window vs preceding 30 days (daytime rows), from solar-drift.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisLabel": "Drift Score (PSI / KS)",
+            "axisLabel": "KS statistic",
             "drawStyle": "line",
             "fillOpacity": 10,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "showPoints": "always",
+            "pointSize": 5,
+            "spanNulls": false
           },
-          "unit": "short"
+          "unit": "none",
+          "decimals": 3
         },
         "overrides": []
       },
@@ -474,18 +541,177 @@
         "y": 7
       },
       "id": 7,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "drift_score{site=\"dkasc\"}",
+          "expr": "last_over_time(pv_drift_feature_ks_stat{service=\"solar-drift\"}[26h])",
           "legendFormat": "{{feature}}",
           "refId": "A"
         }
       ],
-      "title": "Feature-Level Drift Scores (PSI / KS)",
+      "title": "Per-Feature KS Statistic",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "description": "drift_score{feature=\"all\"} per daily drift run. Dashed line = 0.40 drift threshold.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "share of features",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "showPoints": "always",
+            "pointSize": 5,
+            "spanNulls": false,
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "unit": "percentunit",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.4
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 15
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "last_over_time(drift_score{feature=\"all\",service=\"solar-drift\"}[26h])",
+          "legendFormat": "share drifted",
+          "refId": "A"
+        }
+      ],
+      "title": "KS Drift Score (share of features drifted)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "description": "pv_drift_target_psi: Population Stability Index of target_norm, current vs reference window. Dashed line = 0.20 drift threshold (DRIFT_PSI_THRESHOLD).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "PSI",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "showPoints": "always",
+            "pointSize": 5,
+            "spanNulls": false,
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "unit": "none",
+          "decimals": 3,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.2
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 15
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "last_over_time(pv_drift_target_psi{service=\"solar-drift\"}[26h])",
+          "legendFormat": "PSI {{feature}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Target PSI (target_norm)",
       "type": "timeseries"
     },
     {
@@ -494,7 +720,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 15
+        "y": 23
       },
       "id": 102,
       "panels": [],
@@ -506,22 +732,24 @@
         "type": "prometheus",
         "uid": "grafanacloud-prom"
       },
-      "description": "Tracks 5-minute QC flags (missing, negative, over_kwp, stuck, day_zero — flagged, not deleted) and critical schema violations.",
+      "description": "From the daily solar-ingest job (01:00 UTC). Schema violations = duplicate (source_id, ts_utc_end) keys + unauthorized columns in train_table (pvdata.validate hard checks 1-2). QC flags = hourly train_table rows carrying each 5-min QC flag (missing, neg, over_kwp, stuck, day_zero) in the latest month of data.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisLabel": "Flagged Records Count",
-            "drawStyle": "bars",
-            "fillOpacity": 80,
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            }
+            "axisLabel": "rows",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "showPoints": "always",
+            "pointSize": 5,
+            "spanNulls": false
           },
-          "unit": "short"
+          "unit": "none",
+          "decimals": 0
         },
         "overrides": []
       },
@@ -529,17 +757,28 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 16
+        "y": 24
       },
       "id": 8,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "pv_ingestion_schema_violations_total",
-          "legendFormat": "CRITICAL: Schema / Night-Irradiance Violation",
+          "expr": "last_over_time(pv_ingestion_schema_violations{service=\"solar-ingest\"}[26h])",
+          "legendFormat": "schema violations",
           "refId": "A"
         },
         {
@@ -547,12 +786,12 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "pv_ingestion_range_flags_total",
-          "legendFormat": "QC Flag: {{flag_type}} (Flagged, Retained)",
+          "expr": "last_over_time(pv_ingestion_range_flags{service=\"solar-ingest\"}[26h])",
+          "legendFormat": "QC flag: {{flag_type}}",
           "refId": "B"
         }
       ],
-      "title": "Ingestion Schema Violations & 5-Min Physical QC Flags",
+      "title": "Ingestion Schema Violations & QC Flags (latest month)",
       "type": "timeseries"
     },
     {
@@ -560,20 +799,24 @@
         "type": "prometheus",
         "uid": "grafanacloud-prom"
       },
-      "description": "Execution duration of the 4 scheduled ECS Fargate MLOps jobs orchestrated by EventBridge & Step Functions: solar-ingest (01:00), solar-evaluate (03:00), solar-drift (04:00), solar-retrain (Weekly).",
+      "description": "pv_batch_job_duration_seconds{job_name}: wall-clock time of each run (ingest 01:00, evaluate 03:00, drift 04:00 UTC daily; retrain Sundays 02:00 UTC). A gap means the job did not run or could not export.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisLabel": "Duration (seconds)",
+            "axisLabel": "duration",
             "drawStyle": "line",
-            "fillOpacity": 15,
+            "fillOpacity": 10,
             "lineInterpolation": "stepAfter",
-            "lineWidth": 2
+            "lineWidth": 2,
+            "showPoints": "always",
+            "pointSize": 5,
+            "spanNulls": false
           },
-          "unit": "s"
+          "unit": "s",
+          "decimals": 0
         },
         "overrides": []
       },
@@ -581,22 +824,318 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 16
+        "y": 24
       },
       "id": 9,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "pv_job_duration_seconds{job=~\"solar-ingest|solar-evaluate|solar-drift|solar-retrain\"}",
-          "legendFormat": "{{job}} Duration",
+          "expr": "last_over_time(pv_batch_job_duration_seconds{job_name=~\"solar-ingest|solar-evaluate|solar-drift|solar-retrain\"}[26h])",
+          "legendFormat": "{{job_name}}",
           "refId": "A"
         }
       ],
-      "title": "Scheduled MLOps Batch Jobs Duration",
+      "title": "Scheduled MLOps Batch Job Duration",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "description": "pv_ingestion_rows{stage}: rows in the rebuilt train_table, rows kept by the usable-row filter, and usable rows newer than the latest record already on Supabase. pv_ingestion_data_lag_hours (right axis): hours from the run to the newest ts_utc_end.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "rows",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "showPoints": "always",
+            "pointSize": 5,
+            "spanNulls": false
+          },
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "h"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "lag"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "last_over_time(pv_ingestion_rows{service=\"solar-ingest\"}[26h])",
+          "legendFormat": "rows: {{stage}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "last_over_time(pv_ingestion_data_lag_hours{service=\"solar-ingest\"}[26h])",
+          "legendFormat": "data lag (h)",
+          "refId": "B"
+        }
+      ],
+      "title": "Ingestion Volume & Data Lag",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "description": "pv_batch_job_success{job_name}: 1 if the job's last run finished without error. Looks back 8 days so the weekly retrain stays visible.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "FAILED",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "OK",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "none",
+          "noValue": "No data yet"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 32
+      },
+      "id": 13,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "last_over_time(pv_batch_job_success{job_name=~\"solar-ingest|solar-evaluate|solar-drift|solar-retrain\"}[8d])",
+          "legendFormat": "{{job_name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Last Run Status per Job",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "description": "pv_retrain_test_rmse: challenger RMSE on the test split. pv_retrain_candidate_promoted: 1 if the new version got the 'candidate' alias (beat the champion or first model); promotion to champion stays manual.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 4,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none",
+          "noValue": "No data yet"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "No (champion kept)",
+                        "color": "orange",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "Yes",
+                        "color": "green",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 32
+      },
+      "id": 14,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "last_over_time(pv_retrain_test_rmse{service=\"solar-retrain\"}[8d])",
+          "legendFormat": "test RMSE (v{{model_version}})",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "last_over_time(pv_retrain_candidate_promoted{service=\"solar-retrain\"}[8d])",
+          "legendFormat": "candidate assigned",
+          "refId": "B"
+        }
+      ],
+      "title": "Latest Weekly Retrain",
+      "type": "stat"
     }
   ],
   "refresh": "30s",
