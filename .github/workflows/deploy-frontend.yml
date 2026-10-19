@@ -1,5 +1,7 @@
 name: Deploy Frontend
 
+# Chain: build (vercel pull + vercel build --prod, uploads .vercel/output) -> deploy (prebuilt) -> smoke-check
+
 on:
   push:
     branches: [master]
@@ -22,10 +24,11 @@ env:
   VERCEL_CLI_VERSION: "64.5.0"
 
 jobs:
-  deploy:
-    name: deploy
+  build:
+    name: build
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
+    # prod holds VITE_BACKEND_API_URL / API_DOMAIN / FRONTEND_ORIGIN that get baked into the bundle.
     environment: prod
     defaults:
       run:
@@ -34,7 +37,8 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
+    outputs:
+      frontend_origin: ${{ steps.origin.outputs.url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -74,14 +78,79 @@ jobs:
           echo "url=${URL%/}" >> "$GITHUB_OUTPUT"
           echo "VITE_BACKEND_API_URL=${URL%/}"
 
+      - name: Resolve frontend origin
+        id: origin
+        env:
+          FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+        run: echo "url=${FRONTEND_ORIGIN%/}" >> "$GITHUB_OUTPUT"
+
       - name: Pull Vercel project settings
         run: npx --yes "vercel@${VERCEL_CLI_VERSION}" pull --yes --environment=production --token="$VERCEL_TOKEN"
 
-      - name: Build (prebuilt, bakes in VITE_BACKEND_API_URL)
+      - name: Build (bakes in VITE_BACKEND_API_URL)
         env:
           VITE_BACKEND_API_URL: ${{ steps.backend.outputs.url }}
-          VITE_FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+          VITE_FRONTEND_ORIGIN: ${{ steps.origin.outputs.url }}
         run: npx --yes "vercel@${VERCEL_CLI_VERSION}" build --prod --token="$VERCEL_TOKEN"
 
+      # Only the build output and project link; the pulled .env files stay on the runner.
+      - name: Upload prebuilt output
+        uses: actions/upload-artifact@v4
+        with:
+          name: vercel-prebuilt
+          path: |
+            apps/frontend/.vercel/output
+            apps/frontend/.vercel/project.json
+          include-hidden-files: true
+          retention-days: 1
+          if-no-files-found: error
+
+  deploy:
+    name: deploy
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: prod
+    defaults:
+      run:
+        working-directory: apps/frontend
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download prebuilt output
+        uses: actions/download-artifact@v4
+        with:
+          name: vercel-prebuilt
+          path: apps/frontend/.vercel
+
       - name: Deploy prebuilt output to Vercel (prod)
-        run: npx --yes "vercel@${VERCEL_CLI_VERSION}" deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN"
+        run: |
+          DEPLOY_URL=$(npx --yes "vercel@${VERCEL_CLI_VERSION}" deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN")
+          echo "Deployed: ${DEPLOY_URL}" >> "$GITHUB_STEP_SUMMARY"
+
+  smoke-check:
+    name: smoke-check
+    needs: [build, deploy]
+    if: needs.build.outputs.frontend_origin != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: GET production origin
+        env:
+          ORIGIN: ${{ needs.build.outputs.frontend_origin }}
+        run: |
+          for _ in $(seq 1 6); do
+            if curl -fsSL --max-time 10 "$ORIGIN" | grep -qi '<div id="root"'; then
+              echo "Smoke check OK: ${ORIGIN}"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::${ORIGIN} did not serve the SPA shell"
+          exit 1

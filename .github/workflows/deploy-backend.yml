@@ -1,5 +1,7 @@
 name: Deploy Backend
 
+# Chain: build-and-push-image -> deploy-ecs (prod) -> health-check
+
 on:
   push:
     branches: [master]
@@ -23,15 +25,16 @@ env:
   ALB_NAME: pv-forecasting-alb
 
 jobs:
-  build-and-deploy:
-    name: build-and-deploy
+  build-and-push-image:
+    name: build-and-push-image
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: prod
     permissions:
       contents: read
-      id-token: write # AWS OIDC
-
+      id-token: write # AWS OIDC (ECR push)
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,27 +46,63 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          role-session-name: GitHubActions-DeployBackend
+          role-session-name: GitHubActions-BackendImage
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Log in to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Image name
+        id: meta
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: echo "image=${REGISTRY}/${ECR_REPOSITORY}" >> "$GITHUB_OUTPUT"
+
       - name: Build and push image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ./apps/backend
           file: ./apps/backend/Dockerfile
           push: true
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+            ${{ steps.meta.outputs.image }}:${{ github.sha }}
+            ${{ steps.meta.outputs.image }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Summary
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: echo "Pushed ${IMAGE}:${GITHUB_SHA} (${DIGEST})" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-ecs:
+    name: deploy-ecs
+    needs: build-and-push-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: prod
+    permissions:
+      contents: read
+      id-token: write # AWS OIDC
+    outputs:
+      health_url: ${{ steps.url.outputs.health_url }}
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-DeployECS
+          aws-region: ${{ env.AWS_REGION }}
+
       - name: Rolling deploy to ECS Fargate
+        env:
+          IMAGE: ${{ needs.build-and-push-image.outputs.image }}
+          DIGEST: ${{ needs.build-and-push-image.outputs.digest }}
         run: |
+          echo "Rolling ${ECS_SERVICE} onto ${IMAGE}:latest (${DIGEST})"
           aws ecs update-service \
             --cluster "$ECS_CLUSTER" \
             --service "$ECS_SERVICE" \
@@ -78,7 +117,8 @@ jobs:
             --services "$ECS_SERVICE" \
             --region "$AWS_REGION"
 
-      - name: Post-deploy /health check
+      - name: Resolve health URL
+        id: url
         env:
           API_URL: ${{ vars.VITE_BACKEND_API_URL }}
         run: |
@@ -91,14 +131,27 @@ jobs:
               --region "$AWS_REGION")
             BASE_URL="http://${ALB_DNS}"
           fi
-          echo "Checking ${BASE_URL}/health"
+          echo "health_url=${BASE_URL}/health" >> "$GITHUB_OUTPUT"
+
+  health-check:
+    name: health-check
+    needs: deploy-ecs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: GET /health
+        env:
+          HEALTH_URL: ${{ needs.deploy-ecs.outputs.health_url }}
+        run: |
+          echo "Checking ${HEALTH_URL}"
           for _ in $(seq 1 12); do
-            if curl -fsSL --max-time 10 "${BASE_URL}/health"; then
+            if curl -fsSL --max-time 10 "$HEALTH_URL"; then
               echo
               echo "Health check OK"
               exit 0
             fi
             sleep 10
           done
-          echo "::error::${BASE_URL}/health did not become healthy after deploy"
+          echo "::error::${HEALTH_URL} did not become healthy after deploy"
           exit 1
