@@ -1,9 +1,10 @@
 # Cloudflare DNS + ACM for api.tm-project.id.vn → ALB (HTTPS)
+#
+# Auth: set env CLOUDFLARE_API_TOKEN (CI job env / local shell).
+# Do not pass api_token = "" — the provider treats empty string as invalid
+# ("must only contain a-zA-Z0-9_-") which is confusing.
 
-provider "cloudflare" {
-  # trimspace: gh secret set via pipe often adds a trailing newline, which CF rejects
-  api_token = trimspace(var.cloudflare_api_token)
-}
+provider "cloudflare" {}
 
 data "cloudflare_zone" "api" {
   count = var.cloudflare_zone_id == "" ? 1 : 0
@@ -59,7 +60,7 @@ resource "aws_acm_certificate_validation" "api" {
 }
 
 # Orange-cloud CNAME: visitors hit Cloudflare; origin is the ALB over HTTPS (Full strict).
-# If api.* already exists in Cloudflare, import it once:
+# If api.* already exists in Cloudflare DNS, import it once:
 #   terraform import cloudflare_dns_record.api <zone_id>/<record_id>
 resource "cloudflare_dns_record" "api" {
   zone_id = local.cloudflare_zone_id
