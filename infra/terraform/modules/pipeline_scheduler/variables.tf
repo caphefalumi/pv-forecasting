@@ -113,3 +113,9 @@ variable "schedules_enabled" {
   description = "When false, EventBridge schedules stay DISABLED (scale-to-zero / non-demo)"
   default     = false
 }
+
+variable "mlflow_tracking_uri" {
+  type        = string
+  description = "MLflow tracking URI (Postgres backend store) the eval, drift and retrain jobs log to"
+  sensitive   = true
+}

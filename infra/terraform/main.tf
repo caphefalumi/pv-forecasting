@@ -124,4 +124,5 @@ module "pipeline_scheduler" {
   grafana_otlp_instance_id    = var.grafana_otlp_instance_id
   grafana_secrets             = module.ecs.grafana_secrets
   schedules_enabled           = var.schedules_enabled
+  mlflow_tracking_uri         = var.mlflow_tracking_uri
 }

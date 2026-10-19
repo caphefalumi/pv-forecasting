@@ -116,7 +116,8 @@ locals {
     { name = "AWS_ENDPOINT_URL_S3", value = var.supabase_s3_endpoint },
     { name = "OTEL_EXPORTER_OTLP_PROTOCOL", value = var.otel_exporter_otlp_protocol },
     { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = var.otel_exporter_otlp_endpoint },
-    { name = "GRAFANA_OTLP_INSTANCE_ID", value = var.grafana_otlp_instance_id }
+    { name = "GRAFANA_OTLP_INSTANCE_ID", value = var.grafana_otlp_instance_id },
+    { name = "MLFLOW_TRACKING_URI", value = var.mlflow_tracking_uri }
   ]
 
   ecs_network_config = {
