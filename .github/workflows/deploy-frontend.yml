@@ -39,11 +39,17 @@ jobs:
           role-session-name: GitHubActions-DeployFrontend
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Resolve VITE_BACKEND_API_URL (ALB or env var)
+      - name: Resolve VITE_BACKEND_API_URL (Cloudflare API domain, env, or ALB)
         id: backend
         working-directory: .
         run: |
           URL="${{ vars.VITE_BACKEND_API_URL }}"
+          if [ -z "$URL" ]; then
+            URL="${{ vars.API_DOMAIN }}"
+            if [ -n "$URL" ] && [[ "$URL" != https://* ]]; then
+              URL="https://${URL}"
+            fi
+          fi
           if [ -z "$URL" ]; then
             ALB_DNS=$(aws elbv2 describe-load-balancers \
               --names "${{ env.ALB_NAME }}" \

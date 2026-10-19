@@ -1,0 +1,4 @@
+tfplan
+*.tfplan
+apply2.log
+.terraform/

@@ -181,7 +181,7 @@ resource "aws_ecs_service" "mlflow" {
   name            = "${var.project_name}-mlflow-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.mlflow.arn
-  desired_count   = 0 # scaled to zero; use hosted/remote MLflow URI instead of always-on Fargate
+  desired_count   = 1
   launch_type     = "FARGATE"
 
   network_configuration {

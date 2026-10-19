@@ -1,6 +1,11 @@
 output "alb_dns_name" {
-  description = "Public DNS name of the ALB (Point Vercel HTTP requests here)"
-  value       = "http://${module.alb.alb_dns_name}"
+  description = "Raw ALB DNS name (origin behind Cloudflare)"
+  value       = module.alb.alb_dns_name
+}
+
+output "api_url" {
+  description = "Public HTTPS API base URL (Cloudflare)"
+  value       = "https://${var.api_domain}"
 }
 
 output "frontend_origin" {

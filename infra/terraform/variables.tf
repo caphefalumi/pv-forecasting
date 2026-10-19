@@ -128,3 +128,28 @@ variable "frontend_origin" {
   description = "Primary production frontend origin (Vercel)"
   default     = "https://pv-forecasting.vercel.app"
 }
+
+variable "api_domain" {
+  type        = string
+  description = "Public API hostname (Cloudflare → ALB)"
+  default     = "api.tm-project.id.vn"
+}
+
+variable "cloudflare_zone_name" {
+  type        = string
+  description = "Cloudflare zone that owns api_domain"
+  default     = "tm-project.id.vn"
+}
+
+variable "cloudflare_api_token" {
+  type        = string
+  description = "Cloudflare API token with Zone.DNS Edit + Zone.Settings Edit on tm-project.id.vn"
+  sensitive   = true
+  default     = ""
+}
+
+variable "cloudflare_zone_id" {
+  type        = string
+  description = "Cloudflare Zone ID for tm-project.id.vn (Dashboard → Overview). Skips zone name lookup when set."
+  default     = ""
+}

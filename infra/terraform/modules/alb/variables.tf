@@ -23,3 +23,15 @@ variable "health_check_path" {
   description = "Target group health check path"
   default     = "/health"
 }
+
+variable "enable_https" {
+  type        = bool
+  description = "Attach HTTPS listener and redirect HTTP→HTTPS (known at plan time)"
+  default     = true
+}
+
+variable "acm_certificate_arn" {
+  type        = string
+  description = "ACM certificate ARN for HTTPS listener"
+  default     = ""
+}
