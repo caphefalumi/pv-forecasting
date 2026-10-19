@@ -18,6 +18,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
+import os
 import re
 import sys
 import time
@@ -246,8 +247,10 @@ def fetch_dkasc(
         curr = chunk_end + timedelta(days=1)
 
     if failures:
-        logger.warning("Completed with some rejected chunks: %s", failures)
-        return 1
+        logger.warning("Completed with some rejected chunks (skipped, not ingested): %s", failures)
+        # Set PV_DKASC_STRICT_COMPLETENESS=1 to fail the run on any rejected chunk.
+        if os.environ.get("PV_DKASC_STRICT_COMPLETENESS", "0") == "1":
+            return 1
 
     logger.info("fetch-dkasc completed successfully.")
     return 0
