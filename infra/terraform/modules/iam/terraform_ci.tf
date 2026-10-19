@@ -49,6 +49,7 @@ resource "aws_iam_policy" "terraform_read" {
           "elasticloadbalancing:Describe*",
           "logs:DescribeLogGroups",
           "states:ListStateMachines",
+          "states:ValidateStateMachineDefinition",
           "scheduler:ListSchedules",
           "sqs:ListQueues",
           "iam:ListOpenIDConnectProviders"
