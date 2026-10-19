@@ -23,6 +23,9 @@ jobs:
     name: Deploy frontend (prod)
     runs-on: ubuntu-latest
     environment: prod
+    defaults:
+      run:
+        working-directory: apps/frontend
 
     steps:
       - name: Checkout Repository
@@ -38,6 +41,7 @@ jobs:
 
       - name: Resolve VITE_BACKEND_API_URL (ALB or env var)
         id: backend
+        working-directory: .
         run: |
           URL="${{ vars.VITE_BACKEND_API_URL }}"
           if [ -z "$URL" ]; then
@@ -53,14 +57,13 @@ jobs:
           echo "url=${URL}" >> "$GITHUB_OUTPUT"
           echo "Resolved VITE_BACKEND_API_URL=${URL:-<empty>}"
 
-      - name: Deploy to Vercel
-        uses: amondnet/vercel-action@v25
+      - name: Deploy to Vercel (prod)
         env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VITE_BACKEND_API_URL: ${{ steps.backend.outputs.url }}
           VITE_FRONTEND_ORIGIN: https://pv-forecasting.vercel.app
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          working-directory: ./apps/frontend
-          vercel-args: "--prod"
+        run: |
+          bun x vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+          bun x vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN"
