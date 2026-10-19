@@ -9,6 +9,10 @@ provider "cloudflare" {
   api_token = trimspace(var.cloudflare_api_token)
 }
 
+# Cloudflare's published edge IP ranges (public /ips API). The ALB security
+# group only admits these, so the origin cannot be reached around Cloudflare.
+data "cloudflare_ip_ranges" "cloudflare" {}
+
 # Zone ID is provided via var (default set); no live zone lookup needed.
 locals {
   cloudflare_zone_id = var.cloudflare_zone_id

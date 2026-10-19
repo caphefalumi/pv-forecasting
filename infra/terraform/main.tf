@@ -42,6 +42,10 @@ module "security" {
   source       = "./modules/security"
   project_name = var.project_name
   vpc_id       = module.networking.vpc_id
+
+  # Cloudflare edge ranges (see data.cloudflare_ip_ranges in dns.tf).
+  alb_ingress_ipv4_cidrs = data.cloudflare_ip_ranges.cloudflare.ipv4_cidrs
+  alb_ingress_ipv6_cidrs = data.cloudflare_ip_ranges.cloudflare.ipv6_cidrs
 }
 
 # ── Module 3: Application Load Balancer (HTTPS via ACM + Cloudflare DNS) ──────

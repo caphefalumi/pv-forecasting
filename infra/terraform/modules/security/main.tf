@@ -3,20 +3,24 @@ resource "aws_security_group" "alb" {
   description = "Allows incoming HTTP/HTTPS traffic to Application Load Balancer"
   vpc_id      = var.vpc_id
 
+  # Origin lock-down: the API is only reachable through the proxied Cloudflare
+  # record, so ingress is limited to Cloudflare's published edge ranges.
   ingress {
-    description = "HTTP from Internet (Vercel Client)"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    description      = "HTTP from Cloudflare edge only"
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = var.alb_ingress_ipv4_cidrs
+    ipv6_cidr_blocks = var.alb_ingress_ipv6_cidrs
   }
 
   ingress {
-    description = "HTTPS from Internet (Vercel Client)"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    description      = "HTTPS from Cloudflare edge only"
+    from_port        = 443
+    to_port          = 443
+    protocol         = "tcp"
+    cidr_blocks      = var.alb_ingress_ipv4_cidrs
+    ipv6_cidr_blocks = var.alb_ingress_ipv6_cidrs
   }
 
   egress {
