@@ -56,7 +56,7 @@ The platform is an end-to-end MLOps system that forecasts the 24-hour solar phot
 ### 2.2 Model Training & Registry (`jobs/retrain_pipeline/` & `promote.py`)
 - **Fleet Model:** 2-layer PyTorch LSTM (`hidden_size=128`, `dropout=0.2`, 6-hour sliding window over 23 base features) paired with a `scikit-learn` preprocessing pipeline (`SimpleImputer` + `StandardScaler`).
 - **Experiment Tracking & Registry:** MLflow Server running on ECS Fargate in the private subnet, backed by Supabase PostgreSQL for metadata and S3/Supabase Storage (`artifacts/<run_id>/checkpoint.pt`) for model weights.
-- **Champion / Challenger Lifecycle:** Newly trained models are evaluated against the active `@champion` and tested on behavioral golden sets. Qualifying models receive the `@candidate` alias and require human approval (`promote-model.yml` / `python promote.py`) before transitioning to `@champion`.
+- **Champion / Challenger Lifecycle:** Newly trained models are evaluated against the active `@champion` and tested on behavioral golden sets. Qualifying models receive the `@candidate` alias and require human approval (`python promote.py`) before transitioning to `@champion`.
 
 ### 2.3 Prediction Serving (`apps/backend/` & `apps/frontend/`)
 - **Frontend (`apps/frontend/`):** React 19 + TanStack Router/Query/Form SPA hosted on Vercel. Users input their array parameters (`kwp`, `technology`, `tracking`, `tilt_deg`, `surface_azimuth_pvlib`, `predict_date`) and view the 24-hour D+1 generation curve, peak hour, specific yield ($\text{kWh}/\text{kWp}$), and daily total.

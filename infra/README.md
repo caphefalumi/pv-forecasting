@@ -75,19 +75,28 @@ terraform plan
 terraform apply
 ```
 
-Or use GitHub Actions → **Terraform AWS** → Run workflow (`workflow_dispatch`) with Apply checked.
+Or use GitHub Actions → **Terraform AWS** → Run workflow (`workflow_dispatch`) on `master` with **apply** checked (it defaults to plan-only).
 Requires `environment: prod` secrets: `SUPABASE_S3_*`, `AWS_ROLE_ARN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `MLFLOW_TRACKING_URI`, OTEL secrets.
 
 ---
 
 ## 4. CI/CD Workflows
 
-1. `.github/workflows/ci.yml` — tests + Terraform fmt/validate
-2. `.github/workflows/deploy-backend.yml` — FastAPI image → ECR → ECS (+ `/health` check)
-3. `.github/workflows/deploy-pipeline.yml` — root image (`ingest.py` / `evaluate.py` / `drift.py` / `retrain.py`) → pipeline ECR
-4. `.github/workflows/deploy-frontend.yml` — Vercel production deploy
-5. `.github/workflows/demo-mode.yml` — **start** / **stop** demo scaling
-6. `.github/workflows/promote-model.yml` — MLflow Champion promotion
-7. `.github/workflows/terraform-aws.yml` / `terraform-supabase.yml` — IaC
+1. `.github/workflows/ci.yml` — backend + frontend tests, typecheck and build
+2. `.github/workflows/deploy-backend.yml` — FastAPI image → ECR → ECS (+ `/health` check, fails the job if unhealthy)
+3. `.github/workflows/deploy-frontend.yml` — Vercel prebuilt production deploy
+4. `.github/workflows/terraform-aws.yml` / `terraform-supabase.yml` — IaC, chained `fmt` → `validate` → `plan` → `apply`. PRs touching `infra/terraform/**` run fmt, validate and plan; apply only runs on push to `master` (or a manual dispatch with **apply** checked) in the `prod` environment and applies the exact plan artifact.
 
-Default idle: FastAPI `desired_count=0`, EventBridge schedules `DISABLED`. Use **Demo Mode → start** before a presentation.
+Terraform fmt/validate are owned by the Terraform workflows only (not `ci.yml`).
+
+The ML pipeline image (`pv-forecasting-pipeline` ECR repo, used by the scheduled ingest/evaluate/drift/retrain tasks) is **not** built by CI; build and push it manually when the ML code changes.
+
+Default idle: FastAPI `desired_count=0`, EventBridge schedules `DISABLED` (controlled by the Terraform variables `api_desired_count` and `schedules_enabled`). Before a presentation, scale up manually:
+
+```bash
+aws ecs update-service --cluster pv-forecasting-cluster --service pv-forecasting-fastapi-service --desired-count 1 --region ap-south-1
+```
+
+and set `schedules_enabled = true` in Terraform if the scheduled jobs should run.
+
+GitHub `prod` environment variables used by the workflows (set manually, no longer written by CI): `VITE_BACKEND_API_URL`, `API_DOMAIN`, `FRONTEND_ORIGIN`, `CLOUDFLARE_ZONE_NAME`, `CLOUDFLARE_ZONE_ID`, `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `GRAFANA_OTLP_INSTANCE_ID`.

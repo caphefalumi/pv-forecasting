@@ -37,11 +37,11 @@ Ground-truth labels are sourced from 46 solar arrays (31 usable: 25 training + 6
 
 ```text
 ├── .github/workflows/
-│   ├── ci.yml                      # Backend pytest, Frontend bun:test + build, Ansible & Terraform checks
+│   ├── ci.yml                      # Backend pytest, Frontend bun:test, typecheck + build
 │   ├── deploy-backend.yml          # AWS OIDC -> ECR image push -> ECS rolling deploy -> ALB smoke test
-│   ├── promote-model.yml           # Manual workflow to promote MLflow @candidate -> @champion
-│   ├── terraform-aws.yml           # Terraform fmt, validate, plan & apply for AWS stack
-│   └── terraform-supabase.yml      # Terraform validate, plan & apply for Supabase stack
+│   ├── deploy-frontend.yml         # Vercel prebuilt production deploy
+│   ├── terraform-aws.yml           # Terraform fmt -> validate -> plan (PR) -> apply (master) for AWS stack
+│   └── terraform-supabase.yml      # Terraform fmt -> validate -> plan (PR) -> apply (master) for Supabase stack
 ├── apps/
 │   ├── backend/                    # FastAPI D+1 prediction service, Prometheus /metrics, MLflow loader
 │   └── frontend/                   # React 19 + TanStack Router/Query/Form SPA (Vercel)
@@ -135,7 +135,7 @@ bun run tf:validate
 | `python evaluate.py [--dry-run]` | `solar-evaluate` | Evaluates the active `@champion` model on recent ground-truth records, logs metrics to MLflow, and exits with code `2` if retrain is needed. |
 | `python drift.py [--dry-run]` | `solar-drift` | Runs per-feature KS tests and target PSI (7-day current vs. 30-day reference daytime window), logging `.md` drift reports to MLflow and S3. |
 | `python retrain.py [--dry-run]` | `solar-retrain` | Trains a Challenger fleet LSTM model, compares against `@champion`, uploads `checkpoint.pt`, and assigns `@candidate` if improved. |
-| `python promote.py [--version N] [--approver USER]` | GitHub Action / CLI | Promotes a verified `@candidate` model to `@champion` in MLflow Registry with approver provenance and Discord notification. |
+| `python promote.py [--version N] [--approver USER]` | CLI | Promotes a verified `@candidate` model to `@champion` in MLflow Registry with approver provenance and Discord notification. |
 
 ### 4.2 Data Pipeline Subcommands (`python -m pvdata <cmd>`)
 

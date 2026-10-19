@@ -58,9 +58,9 @@ The platform combines two complementary triggers:
 ### 3.2 Challenger vs. Champion & Promotion Gate
 1. **Training:** `python retrain.py` trains a 2-layer PyTorch LSTM (`window_size=6`, `hidden_size=128`, `num_layers=2`, `dropout=0.2`) with `ReduceLROnPlateau` and early stopping on validation loss.
 2. **Comparison:** If the Challenger achieves a lower test error than the current `@champion` (or if no `@champion` exists yet), it is assigned the `@candidate` alias in MLflow Model Registry and its `checkpoint.pt` bundle (weights + fitted `scikit-learn` preprocessor + feature spec) is uploaded to Supabase/S3 `artifacts/<run_id>/checkpoint.pt`.
-3. **Human Approval & Promotion (`promote.py` / `.github/workflows/promote-model.yml`):**
+3. **Human Approval & Promotion (`promote.py`):**
    - A team member reviews the Discord notification and MLflow run metrics.
-   - Running `python promote.py --version <N> --approver <username>` (or triggering the **Promote Model to Champion** GitHub Actions workflow) transitions the `@champion` alias to version `<N>`, records `promoted_by` and `promoted_at` provenance tags in MLflow, and notifies the team on Discord.
+   - Running `python promote.py --version <N> --approver <username>` transitions the `@champion` alias to version `<N>`, records `promoted_by` and `promoted_at` provenance tags in MLflow, and notifies the team on Discord.
    - The live FastAPI service (`solar-api`) automatically detects the new `@champion` alias within 60 seconds (or immediately via `POST /api/v1/model/reload`) without requiring a container redeploy.
 
 ### 3.3 Model Rollback

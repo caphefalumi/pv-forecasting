@@ -93,7 +93,7 @@ resource "aws_ecs_service" "fastapi" {
   name            = "${var.project_name}-fastapi-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.fastapi.arn
-  desired_count   = var.api_desired_count # 0 idle; scale to 1 for demos via GH Actions
+  desired_count   = var.api_desired_count # 0 idle; scale to 1 for demos via aws ecs update-service
   launch_type     = "FARGATE"
 
   deployment_maximum_percent         = 200
@@ -111,7 +111,7 @@ resource "aws_ecs_service" "fastapi" {
     container_port   = 8000
   }
 
-  # Demo Mode workflow owns runtime count (0 idle / 1 demo); TF only sets the initial value.
+  # Runtime count is changed manually (0 idle / 1 demo); TF only sets the initial value.
   lifecycle {
     ignore_changes = [desired_count]
   }

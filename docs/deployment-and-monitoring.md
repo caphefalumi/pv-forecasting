@@ -14,11 +14,13 @@ All workflows live in `.github/workflows/` and use standard kebab-case naming:
 
 | Workflow File | Trigger | Responsibilities |
 |---|---|---|
-| `ci.yml` | Push to `main`/`master`, Pull Requests | Runs FastAPI unit & integration tests (`uv run pytest`), Frontend unit & integration tests (`bun test`), strict TypeScript check (`tsc --noEmit`), Vite production build (`bun run build`), and `terraform fmt -check` + `terraform validate`. |
-| `deploy-backend.yml` | Push to `apps/backend/**`, Manual dispatch | Authenticates to AWS via OIDC, builds the multi-stage `apps/backend/Dockerfile`, pushes `:latest` and `:<git-sha>` tags to Amazon ECR, triggers a rolling ECS Fargate deployment, waits for `services-stable`, and curls the ALB `/health` endpoint. |
-| `promote-model.yml` | Manual `workflow_dispatch` (`model_version`, `approver`) | Executes `python promote.py` to promote a verified `@candidate` model to `@champion` in the MLflow Model Registry and sends a Discord confirmation notification. |
-| `terraform-aws.yml` | Push/PR to `infra/terraform/**`, Manual dispatch | Initializes remote state in Supabase S3, validates formatting, runs `terraform plan`, and applies the 8-module AWS stack on merge to `main`/`master`. |
-| `terraform-supabase.yml` | Push/PR to `infra/terraform/supabase/**`, Manual dispatch | Plans and applies the Supabase PostgreSQL & Storage project configuration. |
+| `ci.yml` | Push to `master`, Pull Requests (app paths) | Runs FastAPI unit & integration tests (`uv run pytest`), Frontend unit & integration tests (`bun test`), strict TypeScript check (`tsc --noEmit`) and Vite production build (`bun run build`). Terraform checks are owned by the Terraform workflows. |
+| `deploy-backend.yml` | Push to `master` on `apps/backend/**`, Manual dispatch | Authenticates to AWS via OIDC, builds the multi-stage `apps/backend/Dockerfile`, pushes `:latest` and `:<git-sha>` tags to Amazon ECR, triggers a rolling ECS Fargate deployment, waits for `services-stable`, and curls the ALB `/health` endpoint (the job fails if it never becomes healthy). |
+| `deploy-frontend.yml` | Push to `master` on `apps/frontend/**`, Manual dispatch | Builds the SPA with `vercel build --prod` (so `VITE_BACKEND_API_URL` is baked in) and deploys the prebuilt output with `vercel deploy --prebuilt --prod`. |
+| `terraform-aws.yml` | Push/PR to `infra/terraform/**`, Manual dispatch (`apply` defaults to false) | Chained jobs: `fmt` (no credentials) → `validate` (`init -backend=false`) → `plan` (Supabase S3 state, AWS OIDC, uploads `tfplan` artifact) → `apply` (push to `master` or dispatch with `apply`, `prod` environment, applies the exact plan artifact). |
+| `terraform-supabase.yml` | Push/PR to `infra/terraform/supabase/**`, Manual dispatch (`apply` defaults to false) | Same `fmt` → `validate` → `plan` → `apply` chain for the Supabase PostgreSQL & Storage project configuration. |
+
+The ML pipeline image (`pv-forecasting-pipeline`) is not built by CI; it is pushed manually. EventBridge schedule state comes from Terraform (`schedules_enabled`).
 
 ---
 
@@ -92,4 +94,4 @@ Failed scheduled invocations are routed to the SQS Dead-Letter Queue (`pv-foreca
     --task-definition pv-forecasting-solar-api:<PREVIOUS_REVISION> \
     --region ap-south-1
   ```
-- **Model Rollback (MLflow Registry):** Re-assign the `@champion` alias to the previous validated model version via `promote.py` or `.github/workflows/promote-model.yml`, followed by `POST /api/v1/model/reload`.
+- **Model Rollback (MLflow Registry):** Re-assign the `@champion` alias to the previous validated model version via `promote.py`, followed by `POST /api/v1/model/reload`.
