@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  AWS_REGION: ap-south-1
+  AWS_REGION: ap-southeast-1
   ECR_REPOSITORY: pv-forecasting-backend
   ECS_CLUSTER: pv-forecasting-cluster
   ECS_SERVICE: pv-forecasting-fastapi-service

@@ -25,7 +25,7 @@ This directory contains the Infrastructure as Code (Terraform) and Smoke Automat
   (Weather Forecast)   (Logs & State Lake)  (Champion Alias)
 ```
 
-- **Cloud Platform:** AWS (ap-south-1) for container compute, load balancing, and data lake. Networking uses the **account default VPC** (no custom VPC / IGW / NAT) with ECS `assign_public_ip = true` to cut cost.
+- **Cloud Platform:** AWS (ap-southeast-1) for container compute, load balancing, and data lake. Networking uses the **account default VPC** (no custom VPC / IGW / NAT) with ECS `assign_public_ip = true` to cut cost.
 - **Database & Object storage:** Supabase PostgreSQL + Supabase S3-compatible Storage for **everything** (Terraform state, datasets, MLflow artifacts). No AWS S3 data lake.
 - **Containers:** Multi-stage Docker packaging (`builder` + non-root `appuser` runtime).
 - **Automation:** EventBridge cron triggering daily data ingestion and model evaluation.
@@ -94,7 +94,7 @@ The ML pipeline image (`pv-forecasting-pipeline` ECR repo, used by the scheduled
 Default idle: FastAPI `desired_count=0`, EventBridge schedules `DISABLED` (controlled by the Terraform variables `api_desired_count` and `schedules_enabled`). Before a presentation, scale up manually:
 
 ```bash
-aws ecs update-service --cluster pv-forecasting-cluster --service pv-forecasting-fastapi-service --desired-count 1 --region ap-south-1
+aws ecs update-service --cluster pv-forecasting-cluster --service pv-forecasting-fastapi-service --desired-count 1 --region ap-southeast-1
 ```
 
 and set `schedules_enabled = true` in Terraform if the scheduled jobs should run.

@@ -92,6 +92,6 @@ Failed scheduled invocations are routed to the SQS Dead-Letter Queue (`pv-foreca
     --cluster pv-forecasting-cluster \
     --service pv-forecasting-fastapi-service \
     --task-definition pv-forecasting-solar-api:<PREVIOUS_REVISION> \
-    --region ap-south-1
+    --region ap-southeast-1
   ```
 - **Model Rollback (MLflow Registry):** Re-assign the `@champion` alias to the previous validated model version via `promote.py`, followed by `POST /api/v1/model/reload`.
