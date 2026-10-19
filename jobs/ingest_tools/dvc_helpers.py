@@ -55,6 +55,18 @@ def _remote_already_configured(repo_root: Path, remote_name: str = "supabase") -
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
+def _in_git_repo(repo_root: Path) -> bool:
+    """True if repo_root is inside a git work tree (False in container images)."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            cwd=repo_root, capture_output=True, text=True,
+        )
+    except FileNotFoundError:  # git not installed in the image
+        return False
+    return result.returncode == 0 and result.stdout.strip() == "true"
+
+
 def ensure_dvc_initialized(repo_root: Path, remote_name: str = "supabase") -> None:
     """
     Idempotently initialise DVC and configure the Supabase S3 remote.
@@ -67,7 +79,11 @@ def ensure_dvc_initialized(repo_root: Path, remote_name: str = "supabase") -> No
     dvc_dir = repo_root / ".dvc"
     if not dvc_dir.exists():
         logger.info("Initialising DVC in %s", repo_root)
-        _run(["dvc", "init"], cwd=repo_root)
+        cmd = ["dvc", "init"]
+        if not _in_git_repo(repo_root):
+            # Container images ship without .git, so DVC must run without an SCM.
+            cmd.append("--no-scm")
+        _run(cmd, cwd=repo_root)
         logger.info("DVC initialised")
     else:
         logger.debug("DVC already initialised (.dvc/ exists)")
@@ -130,6 +146,10 @@ def git_commit_dvc_changes(repo_root: Path, message: str) -> bool:
 
     Returns True if a commit was made, False if there was nothing to commit.
     """
+    if not _in_git_repo(repo_root):
+        logger.warning("No git repository at %s - skipping DVC pointer commit.", repo_root)
+        return False
+
     # Check if there are any changes in exports/ or .dvc/
     status = _run(["git", "status", "--porcelain", "exports", ".dvc"], cwd=repo_root)
     if not status.strip():
