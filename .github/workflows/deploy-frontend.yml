@@ -65,5 +65,5 @@ jobs:
           VITE_BACKEND_API_URL: ${{ steps.backend.outputs.url }}
           VITE_FRONTEND_ORIGIN: https://pv-forecasting.vercel.app
         run: |
-          bun x vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
-          bun x vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN"
+          npx --yes vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx --yes vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN"
