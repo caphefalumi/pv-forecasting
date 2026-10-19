@@ -5,9 +5,10 @@ name: Terraform AWS
 # Chain: fmt -> validate -> plan (uploads tfplan) -> apply (master only, prod env, applies that exact plan)
 # Manual destroy: workflow_dispatch with action=destroy and confirm_destroy=destroy-pv-forecasting
 # (master only, prod env). Runs plan -destroy then applies that saved plan; plan/apply jobs are skipped.
-# Destroy caveats: ECR repos (modules/ecr) have no force_delete and fail while they hold images; the
-# CI role cannot detach/delete its own IAM role/policies (DenySelfEscalation), so those need an admin;
-# the Supabase state bucket from backend.tf is never destroyed.
+# ECR is kept on purpose: destroy targets every top-level module/resource in state except module.ecr
+# (repos + lifecycle policies), so images survive and a later apply re-adopts them (they stay in state).
+# Destroy caveats: the CI role cannot detach/delete its own IAM role/policies (DenySelfEscalation),
+# so those need an admin; the Supabase state bucket from backend.tf is never destroyed.
 
 on:
   push:
@@ -284,14 +285,71 @@ jobs:
             -backend-config="access_key=${TF_BACKEND_ACCESS_KEY}" \
             -backend-config="secret_key=${TF_BACKEND_SECRET_KEY}"
 
-      - name: terraform plan -destroy
-        run: terraform plan -destroy -input=false -no-color -out=destroy.tfplan
+      - name: Build destroy targets (everything except ECR)
+        id: targets
+        run: |
+          # terraform 1.14 has no -exclude flag, so target every top-level module/resource
+          # in state except module.ecr. -target also pulls in dependents, never dependencies;
+          # module.ecr depends on no managed resource, so it is not destroyed transitively.
+          terraform state list > state_addresses.txt
+          python3 - <<'PY'
+          import re, sys
+          addrs = [l.strip() for l in open("state_addresses.txt") if l.strip()]
+          targets, excluded = [], []
+          for a in addrs:
+              if re.search(r"(^|\.)data\.", a):
+                  continue
+              m = re.match(r"^(module\.[A-Za-z0-9_-]+)", a)
+              top = m.group(1) if m else re.sub(r"\[.*\]$", "", a)
+              if top == "module.ecr" or top.startswith("aws_ecr_"):
+                  excluded.append(a)
+                  continue
+              if top.startswith("module.") and ".aws_ecr_" in a:
+                  sys.exit(f"::error::ECR resource {a} lives outside module.ecr; refusing to target {top}")
+              if top not in targets:
+                  targets.append(top)
+          if not targets:
+              sys.exit("::error::no non-ECR resources in state; nothing to destroy")
+          with open("destroy_targets.txt", "w") as f:
+              f.write("\n".join(targets) + "\n")
+          with open("ecr_kept.txt", "w") as f:
+              f.write("\n".join(excluded) + "\n")
+          PY
+          {
+            echo "### Kept on destroy (ECR)"
+            echo ""
+            sed 's/^/- `/; s/$/`/' ecr_kept.txt
+            echo ""
+            echo "### Destroy targets"
+            echo ""
+            sed 's/^/- `/; s/$/`/' destroy_targets.txt
+          } >> "$GITHUB_STEP_SUMMARY"
+          rm -f state_addresses.txt
+
+      - name: terraform plan -destroy (excluding ECR)
+        run: |
+          args=()
+          while IFS= read -r t; do
+            [ -n "$t" ] && args+=("-target=$t")
+          done < destroy_targets.txt
+          terraform plan -destroy -input=false -no-color "${args[@]}" -out=destroy.tfplan
+
+      - name: Verify plan keeps ECR
+        run: |
+          ecr_deletes="$(terraform show -json destroy.tfplan \
+            | jq -r '.resource_changes[]? | select(((.type | startswith("aws_ecr_")) or (.address | startswith("module.ecr."))) and (.change.actions | index("delete"))) | .address')"
+          if [ -n "$ecr_deletes" ]; then
+            echo "::error::destroy plan would delete ECR resources:"
+            echo "$ecr_deletes"
+            exit 1
+          fi
 
       - name: Destroy plan summary
         run: |
           summary="$(terraform show -no-color destroy.tfplan | grep -E '^(Plan:|No changes)' || true)"
           {
-            echo "### Terraform AWS destroy plan"
+            echo ""
+            echo "### Terraform AWS destroy plan (ECR kept)"
             echo ""
             echo "${summary:-no Plan line found}"
           } >> "$GITHUB_STEP_SUMMARY"
