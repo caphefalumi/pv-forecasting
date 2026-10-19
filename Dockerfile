@@ -38,5 +38,7 @@ RUN chmod +x scripts/run_weekly.sh
 
 USER appuser
 
-ENTRYPOINT ["python", "-m", "pvdata"]
-CMD ["run"]
+# ECS task definitions override command per job:
+#   python ingest.py | evaluate.py | drift.py | retrain.py
+ENTRYPOINT []
+CMD ["python", "ingest.py"]

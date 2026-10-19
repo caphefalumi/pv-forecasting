@@ -12,8 +12,3 @@ output "ecs_task_role_arn" {
   description = "IAM Role ARN for ECS Task"
   value       = aws_iam_role.ecs_task.arn
 }
-
-output "runtime_secret_arn" {
-  description = "AWS Secrets Manager ARN for runtime secrets"
-  value       = aws_secretsmanager_secret.runtime.arn
-}

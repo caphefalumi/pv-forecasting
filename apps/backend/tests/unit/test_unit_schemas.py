@@ -1,9 +1,3 @@
-"""
-Unit Test Suite: Pydantic Schemas & Data Contracts
-Location: apps/backend/tests/unit/test_unit_schemas.py
-Focus: Isolated schema validation, boundaries, enum integrity, defaults.
-"""
-
 import pytest
 from pydantic import ValidationError
 from schemas import (
@@ -57,7 +51,6 @@ def test_forecast_request_invalid_tilt_boundaries():
     with pytest.raises(ValidationError):
         ForecastRequest(tilt_deg=90.1)
 
-    # Valid boundaries [0, 90]
     assert ForecastRequest(tilt_deg=0.0).tilt_deg == 0.0
     assert ForecastRequest(tilt_deg=90.0).tilt_deg == 90.0
 
@@ -69,7 +62,6 @@ def test_forecast_request_invalid_azimuth_boundaries():
     with pytest.raises(ValidationError):
         ForecastRequest(surface_azimuth_pvlib=360.1)
 
-    # Valid boundaries [-180, 360]
     assert ForecastRequest(surface_azimuth_pvlib=-180.0).surface_azimuth_pvlib == -180.0
     assert ForecastRequest(surface_azimuth_pvlib=360.0).surface_azimuth_pvlib == 360.0
 

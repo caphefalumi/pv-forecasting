@@ -33,11 +33,6 @@ output "github_actions_role_arn" {
   value       = module.iam.github_actions_role_arn
 }
 
-output "runtime_secret_arn" {
-  description = "AWS Secrets Manager ARN for runtime secrets"
-  value       = module.iam.runtime_secret_arn
-}
-
 output "daily_pipeline_schedule_arn" {
   description = "EventBridge Daily Ingest Pipeline Schedule ARN (01:00)"
   value       = module.pipeline_scheduler.daily_schedule_arn

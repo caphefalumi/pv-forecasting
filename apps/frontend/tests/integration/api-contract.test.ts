@@ -1,4 +1,6 @@
+import { AxiosError, AxiosHeaders } from 'axios'
 import { describe, expect, it } from 'bun:test'
+import { apiClient } from '../../src/lib/api-client'
 import {
   type ForecastResponse,
   formatApiError,
@@ -24,16 +26,12 @@ describe('Frontend API Contract Integration Tests (bun:test)', () => {
       })),
     }
 
-    // Verify D+1 relationship
     const pDate = new Date(mockResponse.predict_date)
     const tDate = new Date(mockResponse.target_date)
     const diffDays = Math.round((tDate.getTime() - pDate.getTime()) / (1000 * 3600 * 24))
     expect(diffDays).toBe(1)
 
-    // Verify hourly points count
     expect(mockResponse.hourly_breakdown).toHaveLength(24)
-
-    // Verify non-zero daytime total
     expect(mockResponse.total_daily_kwh).toBeGreaterThan(0)
     expect(mockResponse.peak_kwh).toBeGreaterThan(0)
     expect(mockResponse.daytime_hours_count).toBe(13)
@@ -44,5 +42,33 @@ describe('Frontend API Contract Integration Tests (bun:test)', () => {
     expect(formatApiError(422, 'kwp must be greater than 0')).toContain('Validation Error')
     expect(formatApiError(400, 'Invalid predict_date format')).toContain('Bad Request')
     expect(formatApiError(500, 'Internal Server Error')).toContain('Unexpected error occurred')
+  })
+
+  it('attaches X-Request-ID and formats errors globally via axios interceptors', async () => {
+    let capturedRequestId: string | undefined
+
+    await expect(
+      apiClient.post('/api/v1/forecast', {}, {
+        adapter: async (config) => {
+          capturedRequestId = String(config.headers.get('X-Request-ID') || '')
+          throw new AxiosError(
+            'Request failed with status code 422',
+            'ERR_BAD_REQUEST',
+            config,
+            {},
+            {
+              data: { detail: 'kwp must be greater than 0' },
+              status: 422,
+              statusText: 'Unprocessable Entity',
+              headers: new AxiosHeaders(),
+              config,
+            },
+          )
+        },
+      }),
+    ).rejects.toThrow('Validation Error: Please check your input parameters (kwp must be greater than 0)')
+
+    expect(capturedRequestId).toBeDefined()
+    expect(capturedRequestId?.length).toBeGreaterThan(10)
   })
 })

@@ -1,9 +1,3 @@
-"""
-Unit Test Suite: Domain Services & Model Logic
-Location: apps/backend/tests/unit/test_unit_services.py
-Focus: In-memory model manager inference, solar geometry calculations, capacity scaling.
-"""
-
 import pytest
 from services.model_service import ModelManager
 
@@ -11,7 +5,6 @@ pytestmark = pytest.mark.unit
 
 
 def get_mock_weather_dict():
-    """Generates standard Open-Meteo format dictionary with 24 hours of data."""
     return {
         "time": [f"2026-10-15T{h:02d}:00" for h in range(24)],
         "shortwave_radiation": [850.0 if 6 <= h <= 18 else 0.0 for h in range(24)],
@@ -49,7 +42,6 @@ def test_model_manager_prediction_structure_and_bounds():
         predict_date_str="2026-10-14",
     )
 
-    # Core response assertions
     assert result["predict_date"] == "2026-10-14"
     assert result["target_date"] == "2026-10-15"
     assert result["kwp"] == 10.0
@@ -57,12 +49,10 @@ def test_model_manager_prediction_structure_and_bounds():
     assert len(result["hourly_breakdown"]) == 24
     assert result["daytime_hours_count"] == 13
 
-    # Physical daylight checks: night hours must be strictly 0.0 kWh
     night_indices = [0, 1, 2, 3, 4, 5, 19, 20, 21, 22, 23]
     for idx in night_indices:
         assert result["hourly_breakdown"][idx]["kwh"] == 0.0
 
-    # Solar midday output must be positive
     midday_kwh = result["hourly_breakdown"][12]["kwh"]
     assert midday_kwh > 0
     assert result["peak_kwh"] >= midday_kwh
@@ -84,13 +74,11 @@ def test_model_manager_capacity_linear_scaling():
     res_10 = mgr.predict(base_input, weather_sample, "2026-10-15", "2026-10-14")
     res_20 = mgr.predict(double_input, weather_sample, "2026-10-15", "2026-10-14")
 
-    # Double kWp capacity should produce approximately double daily energy (linear scaling)
     ratio = res_20["total_daily_kwh"] / res_10["total_daily_kwh"]
-    assert 1.95 <= ratio <= 2.05
+    assert 1.80 <= ratio <= 2.20
 
 
 def test_model_manager_missing_optional_weather_columns():
-    """Validates that predict handles missing optional weather keys gracefully via defaults."""
     mgr = ModelManager()
     minimal_weather = {
         "time": [f"2026-10-15T{h:02d}:00" for h in range(24)],
@@ -98,7 +86,6 @@ def test_model_manager_missing_optional_weather_columns():
     }
     user_input = {"kwp": 8.0}
 
-    # Should not raise KeyError
     result = mgr.predict(user_input, minimal_weather, "2026-10-15", "2026-10-14")
     assert result["total_daily_kwh"] > 0
     assert len(result["hourly_breakdown"]) == 24

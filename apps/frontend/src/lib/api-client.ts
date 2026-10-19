@@ -1,3 +1,4 @@
+import axios, { AxiosError } from 'axios'
 import { createServerFn } from '@tanstack/react-start'
 import {
   type ArrayParameters,
@@ -6,10 +7,46 @@ import {
   validateArrayParameters,
 } from './forecast-utils'
 
-/**
- * Server Function: invokes the FastAPI /api/v1/forecast endpoint running
- * locally or behind the AWS Application Load Balancer.
- */
+export const apiClient = axios.create({
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
+apiClient.interceptors.request.use((config) => {
+  config.baseURL = (process.env.BACKEND_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')
+  config.headers.set('X-Request-ID', config.headers.get('X-Request-ID') || crypto.randomUUID())
+  return config
+})
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error: unknown) => {
+    if (axios.isAxiosError(error)) {
+      const axiosErr = error as AxiosError<{ detail?: unknown } | string>
+      if (axiosErr.response) {
+        const { status, data } = axiosErr.response
+        let detail = ''
+        if (typeof data === 'string') {
+          detail = data
+        } else if (data && typeof data === 'object' && 'detail' in data && data.detail !== undefined) {
+          detail = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)
+        } else if (data !== undefined) {
+          detail = JSON.stringify(data)
+        }
+        return Promise.reject(new Error(formatApiError(status, detail)))
+      }
+      return Promise.reject(
+        new Error(axiosErr.message || 'Unable to connect to FastAPI forecasting backend'),
+      )
+    }
+    return Promise.reject(
+      error instanceof Error ? error : new Error('Unable to connect to FastAPI forecasting backend'),
+    )
+  },
+)
+
 export const getForecastServerFn = createServerFn({ method: 'POST' })
   .validator((data: ArrayParameters) => {
     const check = validateArrayParameters(data)
@@ -19,36 +56,6 @@ export const getForecastServerFn = createServerFn({ method: 'POST' })
     return data
   })
   .handler(async ({ data }): Promise<ForecastResponse> => {
-    const backendUrl = (process.env.BACKEND_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')
-    const requestId = crypto.randomUUID()
-
-    try {
-      const res = await fetch(`${backendUrl}/api/v1/forecast`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Request-ID': requestId,
-        },
-        body: JSON.stringify(data),
-        signal: AbortSignal.timeout(10000),
-      })
-
-      if (!res.ok) {
-        let detail = await res.text()
-        try {
-          const parsed = JSON.parse(detail)
-          if (parsed?.detail) {
-            detail = typeof parsed.detail === 'string' ? parsed.detail : JSON.stringify(parsed.detail)
-          }
-        } catch {
-          // keep raw text
-        }
-        throw new Error(formatApiError(res.status, detail))
-      }
-
-      return (await res.json()) as ForecastResponse
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unable to connect to FastAPI forecasting backend'
-      throw new Error(message)
-    }
+    const res = await apiClient.post<ForecastResponse>('/api/v1/forecast', data)
+    return res.data
   })

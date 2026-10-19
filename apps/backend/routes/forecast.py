@@ -1,56 +1,56 @@
-from datetime import datetime, timedelta
-import pandas as pd
+from datetime import date, datetime, timedelta
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
-from schemas import ForecastRequest, ForecastResponse
+from schemas import (
+    ForecastRequest,
+    ForecastResponse,
+    ModelInfoResponse,
+    ModelReloadResponse,
+)
 from services.model_service import model_manager
 from services.weather_service import fetch_open_meteo_day_ahead
 from services.supabase_service import log_prediction_to_supabase
-from services.telemetry import telemetry_store, push_log_to_loki
+from services.telemetry import telemetry_store, push_log_to_otlp
 
 router = APIRouter(prefix="/api/v1", tags=["forecast"])
 
 
 @router.post("/forecast", response_model=ForecastResponse)
 async def create_forecast(request: ForecastRequest, background_tasks: BackgroundTasks):
-    """Generate Day-Ahead 24-hour PV forecast (Energy Prediction kWh)."""
-    # 1. Resolve Day-Ahead dates (predict_date -> target_date = predict_date + 1)
+    """Generate Day-Ahead 24-hour PV forecast."""
     if request.predict_date:
         try:
-            predict_dt = pd.to_datetime(request.predict_date)
-        except Exception:
+            predict_dt = datetime.strptime(request.predict_date, "%Y-%m-%d").date()
+        except ValueError:
             raise HTTPException(status_code=400, detail="Invalid predict_date format. Use YYYY-MM-DD.")
     else:
-        predict_dt = pd.Timestamp.now().normalize()
+        predict_dt = date.today()
 
-    target_dt = predict_dt + pd.Timedelta(days=1)
-    predict_date_str = str(predict_dt.date())
-    target_date_str = str(target_dt.date())
+    target_dt = predict_dt + timedelta(days=1)
+    predict_date_str = predict_dt.isoformat()
+    target_date_str = target_dt.isoformat()
 
-    # 2. Fetch Day-Ahead weather forecast from Open-Meteo
     weather_hourly = await fetch_open_meteo_day_ahead(
         target_date_str=target_date_str,
         latitude=request.latitude,
         longitude=request.longitude,
     )
 
-    # 3. Model inference: PyTorch LSTM + sklearn preprocessor
+    user_dict = request.model_dump()
     result = model_manager.predict(
-        user_input=request.model_dump(),
+        user_input=user_dict,
         weather_hourly=weather_hourly,
         target_date_str=target_date_str,
         predict_date_str=predict_date_str,
     )
 
-    # 4. Track Out-of-Distribution (OOD) user traffic & log to Supabase + Loki
-    user_dict = request.model_dump()
     is_ood = telemetry_store.check_and_record_ood(user_dict)
     result["is_ood"] = is_ood
     result["inputs"] = {**user_dict, "is_ood": is_ood}
     result["weather_forecast"] = weather_hourly
     background_tasks.add_task(log_prediction_to_supabase, result)
     background_tasks.add_task(
-        push_log_to_loki,
+        push_log_to_otlp,
         "forecast_served",
         {
             "target_date": target_date_str,
@@ -64,23 +64,23 @@ async def create_forecast(request: ForecastRequest, background_tasks: Background
     return ForecastResponse(**result)
 
 
-@router.get("/model/info")
+@router.get("/model/info", response_model=ModelInfoResponse)
 async def get_model_info():
     """Retrieve active model metadata."""
-    return {
-        "model_version": model_manager.model_version,
-        "model_source": model_manager.model_source,
-        "is_ready": model_manager.model is not None,
-    }
+    return ModelInfoResponse(
+        model_version=model_manager.model_version,
+        model_source=model_manager.model_source,
+        is_ready=model_manager.model is not None,
+    )
 
 
-@router.post("/model/reload")
+@router.post("/model/reload", response_model=ModelReloadResponse)
 async def reload_model():
     """Force reload the Champion model from MLflow Registry without restarting the server."""
     reloaded = model_manager.load_model(force=True)
-    return {
-        "reloaded": reloaded,
-        "model_version": model_manager.model_version,
-        "model_source": model_manager.model_source,
-    }
+    return ModelReloadResponse(
+        reloaded=reloaded,
+        model_version=model_manager.model_version,
+        model_source=model_manager.model_source,
+    )
 

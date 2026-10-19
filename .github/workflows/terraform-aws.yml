@@ -1,10 +1,11 @@
-name: Terraform AWS Infrastructure
+name: Terraform AWS
+
+# Remote state: Supabase Storage S3-compatible backend (bucket terraform-state / aws/terraform.tfstate)
+# Working directory: infra/terraform  (do NOT run terraform from repo root)
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
     paths:
       - "infra/terraform/**"
       - "!infra/terraform/supabase/**"
@@ -15,27 +16,34 @@ on:
       - "!infra/terraform/supabase/**"
       - ".github/workflows/terraform-aws.yml"
   workflow_dispatch:
+    inputs:
+      apply:
+        description: "Run terraform apply after plan"
+        type: boolean
+        default: true
 
 permissions:
-  id-token: write   # Required for AWS OIDC authentication
+  id-token: write
   contents: read
 
 env:
   AWS_REGION: ap-south-1
+  TF_IN_AUTOMATION: "true"
 
 jobs:
-  terraform-aws:
-    name: Plan & Apply AWS Modular Infrastructure
+  terraform:
+    name: fmt → init → validate → plan → apply
     runs-on: ubuntu-latest
+    environment: prod
     defaults:
       run:
         working-directory: infra/terraform
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials via OIDC
+      - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
@@ -46,32 +54,35 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.14.3"
+          terraform_wrapper: false
 
-      - name: Terraform Format Check
-        run: terraform fmt -check
+      - name: Terraform fmt -check
+        run: terraform fmt -check -recursive
 
-      - name: Terraform Init (S3 Remote State in Supabase Storage)
+      - name: Terraform init (Supabase S3 backend)
         run: |
-          terraform init \
+          terraform init -input=false \
             -backend-config="access_key=${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}" \
             -backend-config="secret_key=${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}"
 
-      - name: Terraform Validate
+      - name: Terraform validate
         run: terraform validate
 
-      - name: Terraform Plan
+      - name: Terraform plan
+        id: plan
         run: |
-          terraform plan \
+          terraform plan -input=false -no-color -out=tfplan \
             -var="supabase_url=${{ secrets.SUPABASE_URL }}" \
             -var="supabase_service_role_key=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -var="mlflow_tracking_uri=${{ secrets.MLFLOW_TRACKING_URI }}" \
-            -no-color
+            -var="otel_exporter_otlp_protocol=${{ vars.OTEL_EXPORTER_OTLP_PROTOCOL }}" \
+            -var="otel_exporter_otlp_endpoint=${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}" \
+            -var="otel_exporter_otlp_headers=${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}" \
+            -var="grafana_otlp_instance_id=${{ vars.GRAFANA_OTLP_INSTANCE_ID }}" \
+            -var="grafana_cloud_api_token=${{ secrets.GRAFANA_CLOUD_API_TOKEN }}"
 
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        run: |
-          terraform apply -auto-approve \
-            -var="supabase_url=${{ secrets.SUPABASE_URL }}" \
-            -var="supabase_service_role_key=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -var="mlflow_tracking_uri=${{ secrets.MLFLOW_TRACKING_URI }}" \
-            -no-color
+      - name: Terraform apply
+        if: >-
+          github.event_name == 'workflow_dispatch' && inputs.apply ||
+          (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
+        run: terraform apply -input=false -auto-approve -no-color tfplan

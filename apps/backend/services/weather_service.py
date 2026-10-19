@@ -1,8 +1,7 @@
 import logging
+from typing import Any
 import httpx
 import numpy as np
-import pandas as pd
-from typing import Dict, Any, Optional
 
 from config import settings
 
@@ -11,13 +10,10 @@ logger = logging.getLogger(__name__)
 
 async def fetch_open_meteo_day_ahead(
     target_date_str: str,
-    latitude: Optional[float] = None,
-    longitude: Optional[float] = None,
-) -> Dict[str, Any]:
-    """Fetch hourly weather forecast from Open-Meteo for target_date.
-
-    Falls back to synthetic physics if Open-Meteo is unreachable or fails.
-    """
+    latitude: float | None = None,
+    longitude: float | None = None,
+) -> dict[str, Any]:
+    """Fetch hourly weather forecast from Open-Meteo for target_date, with synthetic clear-sky fallback."""
     lat = latitude if latitude is not None else settings.SITE_LATITUDE
     lon = longitude if longitude is not None else settings.SITE_LONGITUDE
 
@@ -52,7 +48,7 @@ async def fetch_open_meteo_day_ahead(
     return generate_synthetic_weather_day(target_date_str)
 
 
-def generate_synthetic_weather_day(target_date_str: str) -> Dict[str, Any]:
+def generate_synthetic_weather_day(target_date_str: str) -> dict[str, Any]:
     """Synthetic clear-sky weather for offline resilience."""
     times = [f"{target_date_str}T{h:02d}:00" for h in range(24)]
     ghi, dni, dhi, temp, cloud, wind = [], [], [], [], [], []

@@ -29,21 +29,16 @@ async def prometheus_metrics():
 
 @router.get("/api/v1/telemetry/endpoints")
 async def telemetry_endpoints():
-    """Verify configured Grafana Cloud raw endpoints (Prometheus, Loki, Tempo, OTLP)."""
+    """Verify configured Grafana Cloud OTLP exporter settings."""
     return {
-        "prometheus": {
-            "url": settings.GRAFANA_PROMETHEUS_URL,
-            "user": settings.GRAFANA_PROMETHEUS_USER,
-        },
-        "loki": {
-            "url": settings.GRAFANA_LOKI_URL,
-            "user": settings.GRAFANA_LOKI_USER,
-        },
-        "tempo": {
-            "url": settings.GRAFANA_TEMPO_URL,
-            "user": settings.GRAFANA_TEMPO_USER,
-        },
-        "otlp_gateway": settings.GRAFANA_OTLP_ENDPOINT,
+        "otlp": {
+            "protocol": settings.OTEL_EXPORTER_OTLP_PROTOCOL,
+            "endpoint": settings.OTEL_EXPORTER_OTLP_ENDPOINT,
+            "instance_id": settings.GRAFANA_OTLP_INSTANCE_ID,
+            "headers_configured": bool(
+                settings.OTEL_EXPORTER_OTLP_HEADERS or settings.GRAFANA_CLOUD_API_TOKEN
+            ),
+        }
     }
 
 

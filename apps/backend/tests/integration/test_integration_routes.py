@@ -1,9 +1,3 @@
-"""
-Integration Test Suite: FastAPI Routes & HTTP Lifecycle
-Location: apps/backend/tests/integration/test_integration_routes.py
-Focus: End-to-end request parsing, validation responses, and route contracts.
-"""
-
 import pytest
 from starlette.testclient import TestClient
 from main import app
@@ -22,10 +16,27 @@ def test_health_endpoint(client):
     assert resp.status_code == 200
     assert resp.headers.get("X-Request-ID") == "req-health-123"
     assert "X-Process-Time-Ms" in resp.headers
+    assert "etag" in resp.headers
     data = resp.json()
     assert data["status"] == "ok"
     assert data["model_loaded"] is True
     assert "model_source" in data
+
+
+def test_etag_conditional_get_returns_304(client):
+    first = client.get("/api/v1/model/info")
+    assert first.status_code == 200
+    etag = first.headers.get("etag")
+    assert etag is not None and etag.startswith('"') and etag.endswith('"')
+
+    cached = client.get("/api/v1/model/info", headers={"If-None-Match": etag})
+    assert cached.status_code == 304
+    assert cached.content == b""
+    assert cached.headers.get("etag") == etag
+
+    mismatch = client.get("/api/v1/model/info", headers={"If-None-Match": '"stale-etag"'})
+    assert mismatch.status_code == 200
+    assert mismatch.headers.get("etag") == etag
 
 
 def test_model_info_endpoint(client):
@@ -84,15 +95,12 @@ def test_forecast_endpoint_flags_ood_inputs(client):
 
 
 def test_forecast_endpoint_validation_errors_produce_422(client):
-    # Invalid negative kwp
     resp = client.post("/api/v1/forecast", json={"kwp": -10.0})
     assert resp.status_code == 422
 
-    # Invalid technology enum
     resp = client.post("/api/v1/forecast", json={"technology": "invalid-cell-tech"})
     assert resp.status_code == 422
 
-    # Invalid tilt (> 90 deg)
     resp = client.post("/api/v1/forecast", json={"tilt_deg": 120.0})
     assert resp.status_code == 422
 
@@ -126,9 +134,8 @@ def test_telemetry_raw_endpoints_config(client):
     resp = client.get("/api/v1/telemetry/endpoints")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["prometheus"]["user"] == "3616746"
-    assert "prometheus-prod-37-prod-ap-southeast-1.grafana.net" in data["prometheus"]["url"]
-    assert data["loki"]["user"] == "1804041"
-    assert "logs-prod-020.grafana.net" in data["loki"]["url"]
-    assert data["tempo"]["user"] == "1798340"
-    assert "tempo-prod-14-prod-ap-southeast-1.grafana.net" in data["tempo"]["url"]
+    assert data["otlp"]["protocol"] == "http/protobuf"
+    assert data["otlp"]["endpoint"].endswith("/otlp")
+    assert "otlp-gateway-prod-ap-southeast-1.grafana.net" in data["otlp"]["endpoint"]
+    assert data["otlp"]["instance_id"] == "1846261"
+    assert "headers_configured" in data["otlp"]

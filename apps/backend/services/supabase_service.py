@@ -1,22 +1,27 @@
+import asyncio
 import logging
-from typing import Dict, Any
+from typing import Any
 from urllib.parse import urlparse
 from config import settings
 
 logger = logging.getLogger(__name__)
 
 
-async def log_prediction_to_supabase(prediction_data: Dict[str, Any]) -> None:
-    """Log prediction summary to Supabase for Sprint 1 & Sprint 2 eval jobs."""
+def _insert_prediction_log(row: dict[str, Any]) -> None:
+    from supabase import create_client
+
+    parsed = urlparse(settings.SUPABASE_URL)
+    base_url = f"{parsed.scheme}://{parsed.hostname}"
+    client = create_client(base_url, settings.SUPABASE_SERVICE_ROLE_KEY)
+    client.table("prediction_logs").insert(row).execute()
+
+
+async def log_prediction_to_supabase(prediction_data: dict[str, Any]) -> None:
+    """Persist prediction summary to Supabase."""
     if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
         return
 
     try:
-        from supabase import create_client
-        parsed = urlparse(settings.SUPABASE_URL)
-        base_url = f"{parsed.scheme}://{parsed.hostname}"
-        client = create_client(base_url, settings.SUPABASE_SERVICE_ROLE_KEY)
-
         user_input = prediction_data.get("inputs", {})
         row = {
             "predict_date": prediction_data.get("predict_date"),
@@ -35,8 +40,11 @@ async def log_prediction_to_supabase(prediction_data: Dict[str, Any]) -> None:
             "hourly_predictions": prediction_data.get("hourly_breakdown", []),
         }
 
-        client.table("prediction_logs").insert(row).execute()
-        logger.info("Successfully logged prediction to Supabase 'prediction_logs' (target_date=%s, total=%s kWh)",
-                    row["target_date"], row["total_daily_kwh"])
+        await asyncio.to_thread(_insert_prediction_log, row)
+        logger.info(
+            "Successfully logged prediction to Supabase 'prediction_logs' (target_date=%s, total=%s kWh)",
+            row["target_date"],
+            row["total_daily_kwh"],
+        )
     except Exception as exc:
         logger.warning("Failed to log prediction to Supabase: %s", exc)

@@ -1,0 +1,87 @@
+name: Demo Mode (scale API + schedules)
+
+# Idle by default (desired_count=0, schedules DISABLED).
+# Run this workflow before a demo (start) and after (stop).
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "start = scale up for demo; stop = scale to zero"
+        required: true
+        type: choice
+        options:
+          - start
+          - stop
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-south-1
+  ECS_CLUSTER: pv-forecasting-cluster
+  ECS_SERVICE: pv-forecasting-fastapi-service
+  SCHEDULES: >-
+    pv-forecasting-daily-ingest
+    pv-forecasting-daily-evaluate
+    pv-forecasting-daily-drift
+    pv-forecasting-weekly-retrain
+
+jobs:
+  toggle:
+    name: ${{ inputs.mode }} demo mode
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-DemoMode
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Scale FastAPI service
+        run: |
+          COUNT=$([ "${{ inputs.mode }}" = "start" ] && echo 1 || echo 0)
+          echo "Setting desired count → $COUNT"
+          aws ecs update-service \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --service "${{ env.ECS_SERVICE }}" \
+            --desired-count "$COUNT" \
+            --region "${{ env.AWS_REGION }}"
+          aws ecs wait services-stable \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --services "${{ env.ECS_SERVICE }}" \
+            --region "${{ env.AWS_REGION }}" || true
+
+      - name: Toggle EventBridge schedules
+        run: |
+          STATE=$([ "${{ inputs.mode }}" = "start" ] && echo ENABLED || echo DISABLED)
+          echo "Setting schedules → $STATE"
+          for NAME in ${{ env.SCHEDULES }}; do
+            EXPR=$(aws scheduler get-schedule --name "$NAME" --query ScheduleExpression --output text)
+            TARGET=$(aws scheduler get-schedule --name "$NAME" --query Target --output json)
+            DESC=$(aws scheduler get-schedule --name "$NAME" --query Description --output text)
+            echo "$TARGET" > /tmp/target.json
+            aws scheduler update-schedule \
+              --name "$NAME" \
+              --state "$STATE" \
+              --schedule-expression "$EXPR" \
+              --flexible-time-window Mode=OFF \
+              --target file:///tmp/target.json \
+              --description "$DESC" \
+              --region "${{ env.AWS_REGION }}"
+            echo "  $NAME → $STATE"
+          done
+
+      - name: Show ALB URL (start only)
+        if: inputs.mode == 'start'
+        run: |
+          ALB_DNS=$(aws elbv2 describe-load-balancers \
+            --names pv-forecasting-alb \
+            --query "LoadBalancers[0].DNSName" \
+            --output text \
+            --region "${{ env.AWS_REGION }}" || echo "unknown")
+          echo "API (when healthy): http://${ALB_DNS}/health"

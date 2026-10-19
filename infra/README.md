@@ -25,7 +25,7 @@ This directory contains the Infrastructure as Code (Terraform) and Smoke Automat
   (Weather Forecast)   (Logs & State Lake)  (Champion Alias)
 ```
 
-- **Cloud Platform:** AWS (ap-south-1) for container compute, load balancing, networking, and data lake.
+- **Cloud Platform:** AWS (ap-south-1) for container compute, load balancing, and data lake. Networking uses the **account default VPC** (no custom VPC / IGW / NAT) with ECS `assign_public_ip = true` to cut cost.
 - **Database & State:** Supabase for PostgreSQL prediction storage (`prediction_logs`) and S3-compatible object storage (`terraform-state`).
 - **Containers:** Multi-stage Docker packaging (`builder` + non-root `appuser` runtime).
 - **Automation:** EventBridge cron triggering daily data ingestion and model evaluation.
@@ -47,7 +47,7 @@ infra/
     ├── variables.tf           # Environment parameters
     ├── outputs.tf             # Exposed endpoints (ALB DNS, ECR URLs, IAM roles)
     ├── modules/
-    │   ├── networking/        # VPC, 2 public & 2 private subnets, NAT, IGW
+    │   ├── networking/        # Default VPC lookup only (no custom VPC/NAT)
     │   ├── security/          # ALB SG (80/443) and ECS SG (port 8000 from ALB)
     │   ├── alb/               # Application Load Balancer & /health Target Group
     │   ├── ecr/               # Backend and pipeline ECR repositories with lifecycles
@@ -71,14 +71,17 @@ Both Terraform stacks store state files remotely in the Supabase `terraform-stat
 * AWS Infrastructure: `terraform-state/aws/terraform.tfstate`
 * Supabase Stack: `terraform-state/supabase/terraform.tfstate`
 
-### Initialization:
-Provide credentials via environment variables or a local `backend.hcl` (gitignored):
+### Initialization (always from `infra/terraform`, never repo root):
 ```bash
 cd infra/terraform
-terraform init \
-  -backend-config="access_key=<SUPABASE_S3_ACCESS_KEY_ID>" \
-  -backend-config="secret_key=<SUPABASE_S3_SECRET_ACCESS_KEY>"
+terraform init -backend-config=backend.hcl   # gitignored; Supabase S3 keys
+terraform validate
+terraform plan
+terraform apply
 ```
+
+Or use GitHub Actions → **Terraform AWS** → Run workflow (`workflow_dispatch`) with Apply checked.
+Requires `environment: prod` secrets: `SUPABASE_S3_*`, `AWS_ROLE_ARN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `MLFLOW_TRACKING_URI`, OTEL secrets.
 
 ---
 
@@ -103,9 +106,12 @@ ansible-playbook -i infra/ansible/inventory.ini infra/ansible/playbook.yml \
 
 ## 5. CI/CD Workflows
 
-The repository includes 5 GitHub Actions workflows:
-1. `.github/workflows/ci.yml`: Unit & integration tests (`pytest` and `bun:test`), frontend build (`bun run build`), Ansible playbook check, and Terraform format/validation checks.
-2. `.github/workflows/deploy-backend.yml`: Builds multi-stage Docker image, pushes to ECR, triggers rolling ECS deployment, and runs post-deployment smoke tests against the ALB DNS.
-3. `.github/workflows/promote-model.yml`: Promotes a verified Challenger model version to the `@champion` alias in the MLflow Registry with approver provenance and Discord notification.
-4. `.github/workflows/terraform-aws.yml`: Plans and applies AWS infrastructure using GitHub Actions OIDC and Supabase remote state.
-5. `.github/workflows/terraform-supabase.yml`: Plans and applies Supabase project and API configurations.
+1. `.github/workflows/ci.yml` — tests + Terraform/Ansible checks
+2. `.github/workflows/deploy-backend.yml` — FastAPI image → ECR → ECS
+3. `.github/workflows/deploy-pipeline.yml` — root image (`ingest.py` / `evaluate.py` / `drift.py` / `retrain.py`) → pipeline ECR
+4. `.github/workflows/deploy-frontend.yml` — Vercel production deploy
+5. `.github/workflows/demo-mode.yml` — **start** (API count=1 + enable schedules) / **stop** (count=0 + disable schedules)
+6. `.github/workflows/promote-model.yml` — MLflow Champion promotion
+7. `.github/workflows/terraform-aws.yml` / `terraform-supabase.yml` — IaC
+
+Default idle: FastAPI `desired_count=0`, EventBridge schedules `DISABLED`. Use **Demo Mode → start** before a presentation.

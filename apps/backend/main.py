@@ -1,8 +1,9 @@
+import hashlib
 import logging
 import time
 import uuid
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -32,9 +33,9 @@ OPENAPI_TAGS = [
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Preload model on startup to ensure sub-5ms request latency
     logger.info("Initializing PV Forecasting Model...")
-    model_manager.load_model()
+    if model_manager.model is None:
+        model_manager.load_model()
     yield
     logger.info("Shutting down PV Forecasting API.")
 
@@ -47,7 +48,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS configuration for Vercel / local frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -61,11 +61,36 @@ app.add_middleware(
 async def observability_and_correlation_middleware(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
     request.state.request_id = request_id
-    start_time = time.perf_counter()
+    request.state.start_time = time.perf_counter()
 
     response = await call_next(request)
+    duration = time.perf_counter() - request.state.start_time
 
-    duration = time.perf_counter() - start_time
+    if response.status_code == 200 and request.url.path != "/metrics":
+        body = b"".join([chunk async for chunk in response.body_iterator])
+        etag = f'"{hashlib.sha256(body).hexdigest()}"'
+        headers = dict(response.headers)
+        headers["ETag"] = etag
+        headers["X-Request-ID"] = request_id
+        headers["X-Process-Time-Ms"] = f"{duration * 1000.0:.2f}"
+
+        inm = request.headers.get("if-none-match")
+        if request.method in ("GET", "HEAD") and inm:
+            candidates = [t.strip().removeprefix("W/") for t in inm.split(",")]
+            if "*" in candidates or etag in candidates:
+                headers.pop("content-length", None)
+                telemetry_store.record_http_request(304, duration)
+                return Response(status_code=304, headers=headers, background=response.background)
+
+        telemetry_store.record_http_request(response.status_code, duration)
+        return Response(
+            content=body,
+            status_code=response.status_code,
+            headers=headers,
+            media_type=response.media_type,
+            background=response.background,
+        )
+
     if request.url.path != "/metrics":
         telemetry_store.record_http_request(response.status_code, duration)
 
@@ -77,8 +102,10 @@ async def observability_and_correlation_middleware(request: Request, call_next):
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
+    start_time = getattr(request.state, "start_time", None)
+    duration = (time.perf_counter() - start_time) if start_time is not None else 0.0
     logger.error("Unhandled exception [request_id=%s]: %s", request_id, exc, exc_info=True)
-    telemetry_store.record_http_request(500, 0.0)
+    telemetry_store.record_http_request(500, duration)
     return JSONResponse(
         status_code=500,
         content={
@@ -88,7 +115,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         headers={"X-Request-ID": request_id},
     )
 
-# Mount routes
+
 app.include_router(health_router)
 app.include_router(forecast_router)
 

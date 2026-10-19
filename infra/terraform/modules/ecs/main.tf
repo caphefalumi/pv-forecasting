@@ -56,13 +56,11 @@ resource "aws_ecs_task_definition" "fastapi" {
         { name = "SUPABASE_SERVICE_ROLE_KEY", value = var.supabase_service_role_key },
         { name = "SUPABASE_RAW_DATA_BUCKET", value = "processed_data" },
         { name = "MLFLOW_TRACKING_URI", value = var.mlflow_tracking_uri },
-        { name = "GRAFANA_PROMETHEUS_URL", value = "https://prometheus-prod-37-prod-ap-southeast-1.grafana.net/api/prom" },
-        { name = "GRAFANA_PROMETHEUS_USER", value = "3616746" },
-        { name = "GRAFANA_LOKI_URL", value = "https://logs-prod-020.grafana.net/loki/api/v1/push" },
-        { name = "GRAFANA_LOKI_USER", value = "1804041" },
-        { name = "GRAFANA_TEMPO_URL", value = "https://tempo-prod-14-prod-ap-southeast-1.grafana.net/tempo" },
-        { name = "GRAFANA_TEMPO_USER", value = "1798340" },
-        { name = "GRAFANA_OTLP_ENDPOINT", value = "https://otlp-gateway-prod-ap-southeast-1.grafana.net/otlp" }
+        { name = "OTEL_EXPORTER_OTLP_PROTOCOL", value = var.otel_exporter_otlp_protocol },
+        { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = var.otel_exporter_otlp_endpoint },
+        { name = "OTEL_EXPORTER_OTLP_HEADERS", value = var.otel_exporter_otlp_headers },
+        { name = "GRAFANA_OTLP_INSTANCE_ID", value = var.grafana_otlp_instance_id },
+        { name = "GRAFANA_CLOUD_API_TOKEN", value = var.grafana_cloud_api_token }
       ]
 
       logConfiguration = {
@@ -89,7 +87,7 @@ resource "aws_ecs_service" "fastapi" {
   name            = "${var.project_name}-fastapi-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.fastapi.arn
-  desired_count   = 1
+  desired_count   = var.api_desired_count # 0 idle; scale to 1 for demos via GH Actions
   launch_type     = "FARGATE"
 
   deployment_maximum_percent         = 200
@@ -98,13 +96,18 @@ resource "aws_ecs_service" "fastapi" {
   network_configuration {
     subnets          = var.private_subnet_ids
     security_groups  = [var.ecs_security_group_id]
-    assign_public_ip = false
+    assign_public_ip = true # default VPC public subnets; no NAT Gateway
   }
 
   load_balancer {
     target_group_arn = var.target_group_arn
     container_name   = "fastapi-service"
     container_port   = 8000
+  }
+
+  # Demo Mode workflow owns runtime count (0 idle / 1 demo); TF only sets the initial value.
+  lifecycle {
+    ignore_changes = [desired_count]
   }
 }
 
@@ -167,12 +170,12 @@ resource "aws_ecs_service" "mlflow" {
   name            = "${var.project_name}-mlflow-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.mlflow.arn
-  desired_count   = 1
+  desired_count   = 0 # scaled to zero; use hosted/remote MLflow URI instead of always-on Fargate
   launch_type     = "FARGATE"
 
   network_configuration {
     subnets          = var.private_subnet_ids
     security_groups  = [var.ecs_security_group_id]
-    assign_public_ip = false
+    assign_public_ip = true # default VPC public subnets; no NAT Gateway
   }
 }

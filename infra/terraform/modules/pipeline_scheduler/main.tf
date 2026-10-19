@@ -109,27 +109,25 @@ locals {
     { name = "SUPABASE_URL", value = var.supabase_url },
     { name = "SUPABASE_SERVICE_ROLE_KEY", value = var.supabase_service_role_key },
     { name = "SUPABASE_RAW_DATA_BUCKET", value = "processed_data" },
-    { name = "GRAFANA_PROMETHEUS_URL", value = "https://prometheus-prod-37-prod-ap-southeast-1.grafana.net/api/prom" },
-    { name = "GRAFANA_PROMETHEUS_USER", value = "3616746" },
-    { name = "GRAFANA_LOKI_URL", value = "https://logs-prod-020.grafana.net/loki/api/v1/push" },
-    { name = "GRAFANA_LOKI_USER", value = "1804041" },
-    { name = "GRAFANA_TEMPO_URL", value = "https://tempo-prod-14-prod-ap-southeast-1.grafana.net/tempo" },
-    { name = "GRAFANA_TEMPO_USER", value = "1798340" },
-    { name = "GRAFANA_OTLP_ENDPOINT", value = "https://otlp-gateway-prod-ap-southeast-1.grafana.net/otlp" }
+    { name = "OTEL_EXPORTER_OTLP_PROTOCOL", value = var.otel_exporter_otlp_protocol },
+    { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = var.otel_exporter_otlp_endpoint },
+    { name = "OTEL_EXPORTER_OTLP_HEADERS", value = var.otel_exporter_otlp_headers },
+    { name = "GRAFANA_OTLP_INSTANCE_ID", value = var.grafana_otlp_instance_id },
+    { name = "GRAFANA_CLOUD_API_TOKEN", value = var.grafana_cloud_api_token }
   ]
 
   ecs_network_config = {
     AwsvpcConfiguration = {
       Subnets        = var.private_subnet_ids
       SecurityGroups = [var.ecs_security_group_id]
-      AssignPublicIp = "DISABLED"
+      AssignPublicIp = "ENABLED" # default VPC; no NAT Gateway
     }
   }
 }
 
 # ── Shared Image, Multiple Task Definitions (Table 20, Section 4.8.4) ─────────
 
-# 1. solar-ingest: python -m jobs.ingest (0.5 vCPU / 1 GB)
+# 1. solar-ingest: python ingest.py (0.5 vCPU / 1 GB)
 resource "aws_ecs_task_definition" "solar_ingest" {
   family                   = "${var.project_name}-solar-ingest"
   network_mode             = "awsvpc"
@@ -144,7 +142,7 @@ resource "aws_ecs_task_definition" "solar_ingest" {
       name        = "solar-ingest"
       image       = "${var.pipeline_ecr_repository_url}:latest"
       essential   = true
-      command     = ["python", "-m", "jobs.ingest"]
+      command     = ["python", "ingest.py"]
       environment = local.common_env
       logConfiguration = {
         logDriver = "awslogs"
@@ -158,7 +156,7 @@ resource "aws_ecs_task_definition" "solar_ingest" {
   ])
 }
 
-# 2. solar-evaluate: python -m jobs.evaluate (0.5 vCPU / 1 GB)
+# 2. solar-evaluate: python evaluate.py (0.5 vCPU / 1 GB)
 resource "aws_ecs_task_definition" "solar_evaluate" {
   family                   = "${var.project_name}-solar-evaluate"
   network_mode             = "awsvpc"
@@ -173,7 +171,7 @@ resource "aws_ecs_task_definition" "solar_evaluate" {
       name        = "solar-evaluate"
       image       = "${var.pipeline_ecr_repository_url}:latest"
       essential   = true
-      command     = ["python", "-m", "jobs.evaluate"]
+      command     = ["python", "evaluate.py"]
       environment = local.common_env
       logConfiguration = {
         logDriver = "awslogs"
@@ -187,7 +185,7 @@ resource "aws_ecs_task_definition" "solar_evaluate" {
   ])
 }
 
-# 3. solar-drift: python -m jobs.drift_check (1 vCPU / 2 GB)
+# 3. solar-drift: python drift.py (1 vCPU / 2 GB)
 resource "aws_ecs_task_definition" "solar_drift" {
   family                   = "${var.project_name}-solar-drift"
   network_mode             = "awsvpc"
@@ -202,7 +200,7 @@ resource "aws_ecs_task_definition" "solar_drift" {
       name        = "solar-drift"
       image       = "${var.pipeline_ecr_repository_url}:latest"
       essential   = true
-      command     = ["python", "-m", "jobs.drift_check"]
+      command     = ["python", "drift.py"]
       environment = local.common_env
       logConfiguration = {
         logDriver = "awslogs"
@@ -216,7 +214,7 @@ resource "aws_ecs_task_definition" "solar_drift" {
   ])
 }
 
-# 4. solar-retrain: python -m jobs.retrain (2 vCPU / 4 GB)
+# 4. solar-retrain: python retrain.py (2 vCPU / 4 GB)
 resource "aws_ecs_task_definition" "solar_retrain" {
   family                   = "${var.project_name}-solar-retrain"
   network_mode             = "awsvpc"
@@ -231,7 +229,7 @@ resource "aws_ecs_task_definition" "solar_retrain" {
       name        = "solar-retrain"
       image       = "${var.pipeline_ecr_repository_url}:latest"
       essential   = true
-      command     = ["python", "-m", "jobs.retrain"]
+      command     = ["python", "retrain.py"]
       environment = local.common_env
       logConfiguration = {
         logDriver = "awslogs"
@@ -405,6 +403,7 @@ resource "aws_sfn_state_machine" "retraining_pipeline" {
 resource "aws_scheduler_schedule" "daily_ingest" {
   name        = "${var.project_name}-daily-ingest"
   description = "Daily at 01:00: Collects new forecast and actual data into S3 (Table 15)"
+  state       = var.schedules_enabled ? "ENABLED" : "DISABLED"
 
   flexible_time_window {
     mode = "OFF"
@@ -438,6 +437,7 @@ resource "aws_scheduler_schedule" "daily_ingest" {
 resource "aws_scheduler_schedule" "daily_evaluate" {
   name        = "${var.project_name}-daily-evaluate"
   description = "Daily at 03:00: Computes nMAE of predictions vs. actual values (Table 15)"
+  state       = var.schedules_enabled ? "ENABLED" : "DISABLED"
 
   flexible_time_window {
     mode = "OFF"
@@ -471,6 +471,7 @@ resource "aws_scheduler_schedule" "daily_evaluate" {
 resource "aws_scheduler_schedule" "daily_drift" {
   name        = "${var.project_name}-daily-drift"
   description = "Daily at 04:00: Computes drift score and report with Evidently (Table 15)"
+  state       = var.schedules_enabled ? "ENABLED" : "DISABLED"
 
   flexible_time_window {
     mode = "OFF"
@@ -504,6 +505,7 @@ resource "aws_scheduler_schedule" "daily_drift" {
 resource "aws_scheduler_schedule" "weekly_retrain" {
   name        = "${var.project_name}-weekly-retrain"
   description = "Weekly: Retrains the model and runs Challenger vs Champion validation (Table 15)"
+  state       = var.schedules_enabled ? "ENABLED" : "DISABLED"
 
   flexible_time_window {
     mode = "OFF"

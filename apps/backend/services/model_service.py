@@ -1,9 +1,8 @@
 import logging
-import os
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from urllib.parse import urlparse
 
 import numpy as np
@@ -11,22 +10,14 @@ import pandas as pd
 import torch
 import torch.nn as nn
 
-try:
-    from sklearn.impute import SimpleImputer
-    from sklearn.pipeline import Pipeline
-    from sklearn.preprocessing import StandardScaler
-except Exception:
-    SimpleImputer = None
-    Pipeline = None
-    StandardScaler = None
-
 from config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class StandalonePreprocessor:
-    """High-performance vectorized preprocessor compatible with PyO3 embedded runtimes."""
+    """Vectorized fallback standard scaler when no sklearn preprocessor artifact is loaded."""
+
     def __init__(self, mean: np.ndarray, std: np.ndarray):
         self.mean = np.asarray(mean, dtype=np.float32)
         std_arr = np.asarray(std, dtype=np.float32)
@@ -36,8 +27,8 @@ class StandalonePreprocessor:
         x_arr = np.nan_to_num(np.asarray(x, dtype=np.float32), nan=0.0)
         return ((x_arr - self.mean) / self.std).astype(np.float32)
 
-# Base feature group — mirrors feature_spec.json and jobs/retrain_tools/data_loader.py
-BASE_FEATURES: List[str] = [
+
+BASE_FEATURES: list[str] = [
     "ghi_fc", "dni_fc", "dhi_fc", "temp_fc", "cloud_fc", "wind_fc", "wx_source",
     "solar_zenith", "solar_azimuth", "ghi_clear", "kt_fc",
     "poa_fc", "temp_cell_fc", "p_phys_norm",
@@ -62,8 +53,20 @@ TRACKING_CODES = {
 }
 
 
+def _resolve_mlflow_uri() -> str:
+    uri = settings.MLFLOW_TRACKING_URI or settings.SQL_ALCHEMY_DATABASE_URL
+    if not uri:
+        return ""
+    if "pooler.supabase.com:5432" in uri:
+        uri = uri.replace("pooler.supabase.com:5432", "pooler.supabase.com:6543")
+    if uri.startswith("postgresql://"):
+        uri = "postgresql+psycopg2://" + uri[len("postgresql://"):]
+    elif uri.startswith("postgres://"):
+        uri = "postgresql+psycopg2://" + uri[len("postgres://"):]
+    return uri
+
+
 def _make_module(input_size: int = 23, hidden_size: int = 128, num_layers: int = 2, dropout: float = 0.2):
-    """Reconstruct nn.Module matching jobs/retrain_tools/lstm_model.py."""
     class _Inner(nn.Module):
         def __init__(self):
             super().__init__()
@@ -91,41 +94,41 @@ class ModelManager:
     """Manages dynamic model loading and zero-downtime champion updates."""
 
     def __init__(self):
-        self.model: Optional[nn.Module] = None
-        self.preprocessor: Optional[Pipeline] = None
+        self.model: nn.Module | None = None
+        self.preprocessor: Any = None
+        self.feature_cols: list[str] = list(BASE_FEATURES)
+        self.window_size: int = 6
         self.model_version: str = "initialising"
         self.model_source: str = "none"
-        self.current_run_id: Optional[str] = None
+        self.current_run_id: str | None = None
         self.last_checked_time: float = 0.0
-        self.check_ttl_seconds: float = 60.0  # Check for promoted Champion every 60s
+        self.check_ttl_seconds: float = 60.0
         self.load_model()
 
     def load_model(self, force: bool = False) -> bool:
-        """Attempt to load or reload champion from MLflow/Supabase, fallback to mock."""
+        """Attempt to load or reload champion from MLflow/Supabase, fallback to standalone model."""
         self.last_checked_time = time.time()
 
-        # 1. Try MLflow + Supabase champion
         if settings.SUPABASE_URL and settings.SUPABASE_SERVICE_ROLE_KEY:
             try:
                 import mlflow
                 from mlflow.tracking import MlflowClient
                 from supabase import create_client
 
-                if settings.MLFLOW_TRACKING_URI:
-                    mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
+                tracking_uri = _resolve_mlflow_uri()
+                if tracking_uri:
+                    mlflow.set_tracking_uri(tracking_uri)
 
                 client = MlflowClient()
                 mv = client.get_model_version_by_alias(settings.REGISTERED_MODEL_NAME, settings.MODEL_ALIAS)
                 run_id = mv.run_id
                 version = str(mv.version)
 
-                # Skip download if champion hasn't changed
                 if not force and self.current_run_id == run_id and self.model is not None:
                     return False
 
                 logger.info("Found Champion model in MLflow Registry: version=%s run_id=%s. Downloading...", version, run_id)
 
-                # Download checkpoint from Supabase
                 parsed = urlparse(settings.SUPABASE_URL)
                 base_url = f"{parsed.scheme}://{parsed.hostname}"
                 sb_client = create_client(base_url, settings.SUPABASE_SERVICE_ROLE_KEY)
@@ -147,9 +150,10 @@ class ModelManager:
                 new_model.load_state_dict(state)
                 new_model.eval()
 
-                # Atomically update references
                 self.model = new_model
                 self.preprocessor = checkpoint["preprocessor"]
+                self.feature_cols = list(checkpoint.get("feature_cols", BASE_FEATURES))
+                self.window_size = int(checkpoint.get("window_size", 6))
                 self.current_run_id = run_id
                 self.model_version = f"v{version}"
                 self.model_source = f"MLflow Champion (version {version}, run {run_id})"
@@ -161,7 +165,6 @@ class ModelManager:
                 else:
                     logger.debug("Champion check: keeping current model (%s)", exc)
 
-        # 2. Standalone fallback mock model if no model loaded yet
         if self.model is None or self.preprocessor is None:
             input_size = len(BASE_FEATURES)
             self.model = _make_module(input_size=input_size, hidden_size=128, num_layers=2, dropout=0.2)
@@ -185,13 +188,12 @@ class ModelManager:
 
     def predict(
         self,
-        user_input: Dict[str, Any],
-        weather_hourly: Dict[str, Any],
+        user_input: dict[str, Any],
+        weather_hourly: dict[str, Any],
         target_date_str: str,
         predict_date_str: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Perform Day-Ahead 24-hour PV forecast with automatic champion refresh."""
-        # Check for newly promoted Champion model every 60s without requiring code deployment
         if time.time() - self.last_checked_time > self.check_ttl_seconds:
             try:
                 self.load_model(force=False)
@@ -269,11 +271,10 @@ class ModelManager:
                 "doy_cos": np.float32(np.cos(doy_angle)),
             })
 
-        df_24 = pd.DataFrame(rows)[BASE_FEATURES]
+        df_24 = pd.DataFrame(rows)[self.feature_cols]
         feat_scaled = self.preprocessor.transform(df_24.to_numpy().astype(np.float32)).astype(np.float32)
 
-        # Batch 13 daytime hours (06:00 to 18:00) with window_size 6
-        window_size = 6
+        window_size = self.window_size
         daytime_hours = list(range(6, 19))
         windows = [
             feat_scaled[h - (window_size - 1): h + 1]

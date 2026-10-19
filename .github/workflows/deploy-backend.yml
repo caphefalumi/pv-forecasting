@@ -25,6 +25,7 @@ jobs:
   build-and-deploy:
     name: Build Multi-Stage Image & Rolling Deploy to ECS Fargate
     runs-on: ubuntu-latest
+    environment: prod
 
     steps:
       - name: Checkout Repository

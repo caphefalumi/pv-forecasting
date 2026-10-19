@@ -74,7 +74,6 @@ function PVForecastPage() {
 
   return (
     <main className="page-wrap px-4 pb-16 pt-8">
-      {/* Hero Header */}
       <section className="island-shell rise-in relative overflow-hidden rounded-[2rem] px-6 py-8 sm:px-10 sm:py-10">
         <div className="pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.2),transparent_66%)]" />
         <div className="pointer-events-none absolute -bottom-20 -right-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(59,130,246,0.15),transparent_66%)]" />
@@ -100,9 +99,7 @@ function PVForecastPage() {
         </div>
       </section>
 
-      {/* Main Grid: Form + Results */}
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-12">
-        {/* Left Column: Form (TanStack Form) */}
         <section className="island-shell rounded-2xl p-6 lg:col-span-4">
           <h2 className="flex items-center gap-2 text-lg font-bold text-[var(--sea-ink)]">
             <Sliders className="h-5 w-5 text-amber-500" />
@@ -120,12 +117,11 @@ function PVForecastPage() {
             }}
             className="mt-6 space-y-4"
           >
-            {/* Capacity in kWp */}
             <form.Field
               name="kwp"
               validators={{
                 onChange: ({ value }) =>
-                  typeof value !== 'number' || isNaN(value) || value <= 0
+                  typeof value !== 'number' || Number.isNaN(value) || value <= 0
                     ? 'Peak capacity (kWp) must be greater than 0.'
                     : value > 5000
                       ? 'Peak capacity (kWp) exceeds maximum allowable fleet size of 5000 kWp.'
@@ -146,7 +142,7 @@ function PVForecastPage() {
                       type="number"
                       step="0.1"
                       min="0.5"
-                      max="1000"
+                      max="5000"
                       required
                       value={field.state.value}
                       onBlur={field.handleBlur}
@@ -162,12 +158,11 @@ function PVForecastPage() {
               )}
             />
 
-            {/* Cell Technology */}
             <form.Field
               name="technology"
               validators={{
                 onChange: ({ value }) =>
-                  !VALID_TECHNOLOGIES.includes(value as (typeof VALID_TECHNOLOGIES)[number])
+                  !(VALID_TECHNOLOGIES as readonly string[]).includes(value)
                     ? `Invalid technology: ${value}.`
                     : undefined,
               }}
@@ -202,12 +197,11 @@ function PVForecastPage() {
               )}
             />
 
-            {/* Tracking Type */}
             <form.Field
               name="tracking"
               validators={{
                 onChange: ({ value }) =>
-                  !VALID_TRACKING.includes(value as (typeof VALID_TRACKING)[number])
+                  !(VALID_TRACKING as readonly string[]).includes(value)
                     ? `Invalid tracking: ${value}.`
                     : undefined,
               }}
@@ -238,13 +232,12 @@ function PVForecastPage() {
               )}
             />
 
-            {/* Tilt & Azimuth Grid */}
             <div className="grid grid-cols-2 gap-3">
               <form.Field
                 name="tilt_deg"
                 validators={{
                   onChange: ({ value }) =>
-                    typeof value !== 'number' || isNaN(value) || value < 0 || value > 90
+                    typeof value !== 'number' || Number.isNaN(value) || value < 0 || value > 90
                       ? 'Tilt angle must be between 0° and 90°.'
                       : undefined,
                 }}
@@ -277,7 +270,7 @@ function PVForecastPage() {
                 name="surface_azimuth_pvlib"
                 validators={{
                   onChange: ({ value }) =>
-                    typeof value !== 'number' || isNaN(value) || value < -180 || value > 360
+                    typeof value !== 'number' || Number.isNaN(value) || value < -180 || value > 360
                       ? 'Azimuth must be between -180° and 360°.'
                       : undefined,
                 }}
@@ -307,7 +300,6 @@ function PVForecastPage() {
               />
             </div>
 
-            {/* Prediction Date */}
             <form.Field
               name="predict_date"
               validators={{
@@ -373,7 +365,6 @@ function PVForecastPage() {
           )}
         </section>
 
-        {/* Right Column: Results & Visualization */}
         <section className="space-y-6 lg:col-span-8">
           {result ? (
             <>
@@ -386,7 +377,6 @@ function PVForecastPage() {
                 </div>
               )}
 
-              {/* KPI Cards */}
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <div className="island-shell rounded-2xl p-4">
                   <div className="flex items-center justify-between text-xs text-[var(--sea-ink-soft)]">
@@ -450,7 +440,6 @@ function PVForecastPage() {
                 </div>
               </div>
 
-              {/* 24-Hour Solar Production Chart */}
               <div className="island-shell rounded-2xl p-6">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] pb-4">
                   <div>
@@ -473,7 +462,6 @@ function PVForecastPage() {
                   </div>
                 </div>
 
-                {/* Bar Graph */}
                 <div className="mt-6 flex h-48 items-end gap-1.5 pt-6 sm:gap-2">
                   {result.hourly_breakdown.map((h, i) => {
                     const heightPercent = maxKwh > 0 ? (h.kwh / maxKwh) * 100 : 0
@@ -483,13 +471,11 @@ function PVForecastPage() {
                         key={h.hour}
                         className="group relative flex h-full flex-1 flex-col items-center justify-end"
                       >
-                        {/* Hover Tooltip */}
                         <div className="pointer-events-none absolute -top-12 z-20 hidden rounded-lg border border-[var(--line)] bg-[var(--surface-strong)] px-2.5 py-1 text-[10px] font-semibold text-[var(--sea-ink)] shadow-lg group-hover:flex flex-col items-center whitespace-nowrap">
                           <span>{h.hour}: {h.kwh} kWh</span>
                           <span className="text-[var(--sea-ink-soft)]">{h.ghi_fc} W/m²</span>
                         </div>
 
-                        {/* Bar */}
                         <div
                           style={{ height: `${Math.max(heightPercent, 2)}%` }}
                           className={`w-full rounded-t-sm transition-all duration-300 ${
@@ -509,7 +495,6 @@ function PVForecastPage() {
                 </div>
               </div>
 
-              {/* Hourly Data Table */}
               <div className="island-shell overflow-hidden rounded-2xl">
                 <div className="border-b border-[var(--line)] p-4 sm:px-6">
                   <h3 className="text-sm font-bold text-[var(--sea-ink)]">
@@ -520,10 +505,10 @@ function PVForecastPage() {
                   <table className="w-full text-left text-xs">
                     <thead className="sticky top-0 bg-[var(--header-bg)] text-[var(--sea-ink-soft)]">
                       <tr className="border-b border-[var(--line)]">
-                        <th className="px-4 py-2 font-semibold">Hour</th>
-                        <th className="px-4 py-2 font-semibold">GHI Irradiance</th>
-                        <th className="px-4 py-2 font-semibold">Normalized Output</th>
-                        <th className="px-4 py-2 font-semibold text-right">Predicted Energy</th>
+                        <th scope="col" className="px-4 py-2 font-semibold">Hour</th>
+                        <th scope="col" className="px-4 py-2 font-semibold">GHI Irradiance</th>
+                        <th scope="col" className="px-4 py-2 font-semibold">Normalized Output</th>
+                        <th scope="col" className="px-4 py-2 font-semibold text-right">Predicted Energy</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--line)] text-[var(--sea-ink)]">
@@ -552,7 +537,6 @@ function PVForecastPage() {
                 </div>
               </div>
 
-              {/* Provenance Footer */}
               <div className="flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-xs text-emerald-700 dark:text-emerald-300">
                 <span className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -564,7 +548,6 @@ function PVForecastPage() {
               </div>
             </>
           ) : (
-            /* Empty State */
             <div className="island-shell flex h-96 flex-col items-center justify-center rounded-2xl p-8 text-center">
               <Sun className="h-12 w-12 text-amber-500/40 animate-pulse" />
               <h3 className="mt-4 text-base font-bold text-[var(--sea-ink)]">

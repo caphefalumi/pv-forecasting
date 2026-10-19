@@ -1,9 +1,3 @@
-"""
-Integration Test Suite: Supabase Prediction Logging & Resilience
-Location: apps/backend/tests/integration/test_integration_supabase.py
-Focus: Database logging operations and graceful offline handling.
-"""
-
 import pytest
 from services.supabase_service import log_prediction_to_supabase
 
@@ -12,7 +6,6 @@ pytestmark = pytest.mark.integration
 
 @pytest.mark.asyncio
 async def test_supabase_logging_handles_offline_gracefully():
-    """Verify background logging task handles network/credentials without throwing."""
     payload = {
         "target_date": "2026-10-19",
         "predict_date": "2026-10-18",

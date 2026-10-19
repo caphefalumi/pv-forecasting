@@ -1,14 +1,24 @@
-/**
- * forecast-utils.ts — PV Forecasting Domain Logic and Calculations
- * Adheres to best practices: pure functions, strong typing, zero side effects.
- */
-
 export interface HourlyPoint {
   hour: string
   ghi_fc: number
   target_norm: number
   kwh: number
 }
+
+export const VALID_TECHNOLOGIES = [
+  'mono-Si',
+  'poly-Si',
+  'CdTe',
+  'CIGS',
+  'HIT',
+  'a-Si',
+  'CPV',
+] as const
+
+export const VALID_TRACKING = ['fixed', 'single_axis', 'dual_axis'] as const
+
+export type Technology = (typeof VALID_TECHNOLOGIES)[number]
+export type Tracking = (typeof VALID_TRACKING)[number]
 
 export interface ArrayParameters {
   kwp: number
@@ -25,69 +35,54 @@ export interface ForecastResponse {
   kwp: number
   total_daily_kwh: number
   peak_hour: string
-  peak_kwh: float | number
+  peak_kwh: number
   daytime_hours_count: number
   model_version: string
   is_ood?: boolean
   hourly_breakdown: HourlyPoint[]
 }
 
-type float = number
-
-export const VALID_TECHNOLOGIES = [
-  'mono-Si',
-  'poly-Si',
-  'CdTe',
-  'CIGS',
-  'HIT',
-  'a-Si',
-  'CPV',
-] as const
-
-export const VALID_TRACKING = ['fixed', 'single_axis', 'dual_axis'] as const
-
-/**
- * Calculates Specific Yield (kWh / kWp), a key productivity metric in solar engineering.
- */
 export function calculateSpecificYield(totalDailyKwh: number, kwp: number): number {
   if (!kwp || kwp <= 0) return 0
   if (!totalDailyKwh || totalDailyKwh < 0) return 0
   return Number((totalDailyKwh / kwp).toFixed(2))
 }
 
-/**
- * Validates array parameters according to physical and model boundaries.
- */
 export function validateArrayParameters(params: ArrayParameters): {
   valid: boolean
   errors: string[]
 } {
   const errors: string[] = []
 
-  if (typeof params.kwp !== 'number' || isNaN(params.kwp) || params.kwp <= 0) {
+  if (typeof params.kwp !== 'number' || Number.isNaN(params.kwp) || params.kwp <= 0) {
     errors.push('Peak capacity (kWp) must be greater than 0.')
   } else if (params.kwp > 5000) {
     errors.push('Peak capacity (kWp) exceeds maximum allowable fleet size of 5000 kWp.')
   }
 
-  if (typeof params.tilt_deg !== 'number' || isNaN(params.tilt_deg) || params.tilt_deg < 0 || params.tilt_deg > 90) {
+  if (
+    typeof params.tilt_deg !== 'number' ||
+    Number.isNaN(params.tilt_deg) ||
+    params.tilt_deg < 0 ||
+    params.tilt_deg > 90
+  ) {
     errors.push('Tilt angle must be between 0° and 90°.')
   }
 
   if (
     typeof params.surface_azimuth_pvlib !== 'number' ||
-    isNaN(params.surface_azimuth_pvlib) ||
+    Number.isNaN(params.surface_azimuth_pvlib) ||
     params.surface_azimuth_pvlib < -180 ||
     params.surface_azimuth_pvlib > 360
   ) {
     errors.push('Azimuth must be between -180° and 360°.')
   }
 
-  if (!VALID_TECHNOLOGIES.includes(params.technology as any)) {
+  if (!(VALID_TECHNOLOGIES as readonly string[]).includes(params.technology)) {
     errors.push(`Invalid technology: ${params.technology}. Valid: ${VALID_TECHNOLOGIES.join(', ')}`)
   }
 
-  if (!VALID_TRACKING.includes(params.tracking as any)) {
+  if (!(VALID_TRACKING as readonly string[]).includes(params.tracking)) {
     errors.push(`Invalid tracking: ${params.tracking}. Valid: ${VALID_TRACKING.join(', ')}`)
   }
 
@@ -104,16 +99,10 @@ export function validateArrayParameters(params: ArrayParameters): {
   }
 }
 
-/**
- * Determines whether a given 0-indexed hour of day is typical daylight (06:00 to 18:00 inclusive).
- */
 export function isDaytimeHour(hourIndex: number): boolean {
   return hourIndex >= 6 && hourIndex <= 18
 }
 
-/**
- * Calculates peak generation hour and power from 24 hourly points.
- */
 export function findPeakGeneration(hourlyBreakdown: HourlyPoint[]): {
   peakKwh: number
   peakHour: string
@@ -138,18 +127,12 @@ export function findPeakGeneration(hourlyBreakdown: HourlyPoint[]): {
   }
 }
 
-/**
- * Calculates daily total kWh from 24 hourly points.
- */
 export function sumDailyKwh(hourlyBreakdown: HourlyPoint[]): number {
   if (!hourlyBreakdown || hourlyBreakdown.length === 0) return 0
   const sum = hourlyBreakdown.reduce((acc, curr) => acc + (curr.kwh || 0), 0)
   return Number(sum.toFixed(2))
 }
 
-/**
- * Formats HTTP API status codes and detail messages into user-friendly error strings.
- */
 export function formatApiError(status: number, detail: string): string {
   if (status === 422) {
     return `Validation Error: Please check your input parameters (${detail})`

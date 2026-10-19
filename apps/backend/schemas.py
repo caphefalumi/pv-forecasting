@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -33,14 +32,14 @@ class ForecastRequest(BaseModel):
         }
     )
 
-    kwp: float = Field(default=10.0, gt=0, description="Installed DC capacity in kWp")
+    kwp: float = Field(default=10.0, gt=0, le=5000, description="Installed DC capacity in kWp")
     technology: TechnologyType = Field(default=TechnologyType.MONO_SI, description="PV cell technology")
     tracking: TrackingType = Field(default=TrackingType.FIXED, description="Tracking system type")
     tilt_deg: float = Field(default=20.0, ge=0, le=90, description="Tilt angle in degrees")
-    surface_azimuth_pvlib: float = Field(default=0.0, ge=-180, le=360, description="Surface azimuth angle (0 = North in S. Hemisphere)")
-    predict_date: Optional[str] = Field(default=None, description="Request date YYYY-MM-DD. Target forecast will be predict_date + 1 day")
-    latitude: Optional[float] = Field(default=None, description="Optional override latitude (defaults to site lat)")
-    longitude: Optional[float] = Field(default=None, description="Optional override longitude (defaults to site lon)")
+    surface_azimuth_pvlib: float = Field(default=0.0, ge=-180, le=360, description="Surface azimuth angle")
+    predict_date: str | None = Field(default=None, description="Request date YYYY-MM-DD")
+    latitude: float | None = Field(default=None, ge=-90, le=90, description="Optional override latitude")
+    longitude: float | None = Field(default=None, ge=-180, le=180, description="Optional override longitude")
 
 
 class HourlyPoint(BaseModel):
@@ -59,11 +58,23 @@ class ForecastResponse(BaseModel):
     peak_kwh: float
     daytime_hours_count: int
     model_version: str
-    is_ood: bool = Field(default=False, description="True if array parameters fall outside the DKASC training distribution")
-    hourly_breakdown: List[HourlyPoint]
+    is_ood: bool = Field(default=False, description="True if array parameters fall outside training distribution")
+    hourly_breakdown: list[HourlyPoint]
 
 
 class HealthResponse(BaseModel):
     status: str
     model_loaded: bool
+    model_source: str
+
+
+class ModelInfoResponse(BaseModel):
+    model_version: str
+    model_source: str
+    is_ready: bool
+
+
+class ModelReloadResponse(BaseModel):
+    reloaded: bool
+    model_version: str
     model_source: str

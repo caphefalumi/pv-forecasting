@@ -73,10 +73,16 @@ module "ecs" {
   ecr_repository_url        = module.ecr.backend_repository_url
   ecs_execution_role_arn    = module.iam.ecs_execution_role_arn
   ecs_task_role_arn         = module.iam.ecs_task_role_arn
-  supabase_url              = var.supabase_url
-  supabase_service_role_key = var.supabase_service_role_key
-  mlflow_tracking_uri       = var.mlflow_tracking_uri
-  s3_bucket_uri             = module.storage.bucket_uri
+  supabase_url                 = var.supabase_url
+  supabase_service_role_key    = var.supabase_service_role_key
+  mlflow_tracking_uri          = var.mlflow_tracking_uri
+  s3_bucket_uri                = module.storage.bucket_uri
+  otel_exporter_otlp_protocol  = var.otel_exporter_otlp_protocol
+  otel_exporter_otlp_endpoint  = var.otel_exporter_otlp_endpoint
+  otel_exporter_otlp_headers   = var.otel_exporter_otlp_headers
+  grafana_otlp_instance_id     = var.grafana_otlp_instance_id
+  grafana_cloud_api_token      = var.grafana_cloud_api_token
+  api_desired_count            = var.api_desired_count
 }
 
 # ── Module 8: EventBridge Pipeline Scheduler ───────────────────────────────────
@@ -90,7 +96,13 @@ module "pipeline_scheduler" {
   pipeline_ecr_repository_url = module.ecr.pipeline_repository_url
   ecs_execution_role_arn      = module.iam.ecs_execution_role_arn
   ecs_task_role_arn           = module.iam.ecs_task_role_arn
-  supabase_url                = var.supabase_url
-  supabase_service_role_key   = var.supabase_service_role_key
-  pv_s3_uri                   = module.storage.bucket_uri
+  supabase_url                 = var.supabase_url
+  supabase_service_role_key    = var.supabase_service_role_key
+  pv_s3_uri                    = module.storage.bucket_uri
+  otel_exporter_otlp_protocol  = var.otel_exporter_otlp_protocol
+  otel_exporter_otlp_endpoint  = var.otel_exporter_otlp_endpoint
+  otel_exporter_otlp_headers   = var.otel_exporter_otlp_headers
+  grafana_otlp_instance_id     = var.grafana_otlp_instance_id
+  grafana_cloud_api_token      = var.grafana_cloud_api_token
+  schedules_enabled            = var.schedules_enabled
 }

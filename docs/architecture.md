@@ -90,6 +90,6 @@ Every prediction served to a user can be audited back to the exact code, dataset
 ## 4. Network & Security Boundary
 
 - **VPC Isolation:** Public subnets host only the Application Load Balancer and NAT Gateway. All compute tasks (`solar-api`, `mlflow-server`, `solar-ingest`, `solar-evaluate`, `solar-drift`, `solar-retrain`) run in private subnets with `assign_public_ip = false`.
-- **Least-Privilege IAM:** Separate ECS Task Execution Role (ECR image pull, CloudWatch log stream, Secrets Manager bootstrap) and ECS Task Role (scoped S3 bucket read/write, Prometheus remote write).
+- **Least-Privilege IAM:** Separate ECS Task Execution Role (ECR image pull, CloudWatch logs) and ECS Task Role (scoped S3 bucket read/write). Runtime secrets come from GitHub Actions → ECS task environment.
 - **Short-Lived CI Credentials:** GitHub Actions authenticates to AWS via OpenID Connect (OIDC) without storing static AWS access keys.
 - **Hardened Containers:** Both `Dockerfile` (pipeline) and `apps/backend/Dockerfile` (FastAPI) use multi-stage builds and execute as an unprivileged non-root user (`UID 10001`, `appuser`).
