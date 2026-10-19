@@ -70,7 +70,7 @@ Failed scheduled invocations are routed to the SQS Dead-Letter Queue (`pv-foreca
 | **Infrastructure** | ECS CPU utilization, memory utilization, running task count, ALB healthy hosts | CloudWatch Container Insights & Grafana | `pv_forecasting_infra_service.json` |
 | **Service** | Request rate, HTTP 4xx/5xx error rate, p50/p95/p99 latency (`http_request_duration_seconds`) | Prometheus `/metrics` → Grafana Cloud | `pv_forecasting_infra_service.json` |
 | **Data Quality** | Schema violations (`pv_ingestion_schema_violations`), QC flag counts per type (`pv_ingestion_range_flags{flag_type="missing|neg|over_kwp|stuck|day_zero"}`), rows per stage (`pv_ingestion_rows`), data lag (`pv_ingestion_data_lag_hours`) | `solar-ingest` → OTLP → Grafana Cloud | `pv_forecasting_overview.json` |
-| **Model & Drift** | Live RMSE / MAE / R² and ratio to champion test RMSE (`pv_eval_*`), retrain decision (`pv_eval_needs_retrain`), KS drift share (`drift_score{feature="all"}`), per-feature KS (`pv_drift_feature_ks_stat{feature}`), target PSI (`pv_drift_target_psi`), weekly retrain (`pv_retrain_*`), job health (`pv_batch_job_duration_seconds` / `pv_batch_job_success{job_name}`), user OOD rate (`pv_user_ood_rate`) | Batch jobs → OTLP → Grafana Cloud; MLflow runs; API `/metrics` for OOD | `pv_forecasting_overview.json` |
+| **Model & Drift** | Live RMSE / MAE / R² and ratio to champion test RMSE (`pv_eval_*`), retrain decision (`pv_eval_needs_retrain`), KS drift share (`drift_score{feature="all"}`), per-feature KS (`pv_drift_feature_ks_stat{feature}`), target PSI (`pv_drift_target_psi`), weekly retrain (`pv_retrain_*`), job health (`pv_batch_job_duration_seconds` / `pv_batch_job_success` / `pv_batch_job_last_run_timestamp_seconds{job_name}`), user OOD rate (`pv_user_ood_rate`) | Batch jobs → OTLP → Grafana Cloud; MLflow runs; API `/metrics` for OOD | `pv_forecasting_overview.json` |
 
 ### 4.1.1 Batch Job Metrics (OTLP)
 
@@ -80,7 +80,7 @@ All job metrics are gauges with no unit, so Grafana Cloud keeps the names unchan
 
 | Job | Metrics |
 |---|---|
-| all | `pv_batch_job_duration_seconds{job_name}`, `pv_batch_job_success{job_name}` (0/1) |
+| all | `pv_batch_job_duration_seconds{job_name}`, `pv_batch_job_success{job_name}` (0/1), `pv_batch_job_last_run_timestamp_seconds{job_name}` (Unix time at exit; dashboard shows hours since last run, red > 26h daily / > 170h retrain) |
 | `solar-evaluate` | `pv_eval_live_rmse`, `pv_eval_live_mae`, `pv_eval_live_r2`, `pv_eval_champion_test_rmse`, `pv_eval_rmse_ratio` (when a champion baseline exists), `pv_eval_needs_retrain` — all with `champion_version` |
 | `solar-drift` | `drift_score{feature="all"}` (share of KS-drifted features), `pv_drift_feature_ks_stat{feature}`, `pv_drift_n_features_drifted`, `pv_drift_n_features_tested`, `pv_drift_target_psi{feature="target_norm"}`, `pv_drift_detected`; MLflow also gets `ks_stat_<feature>` |
 | `solar-ingest` | `pv_ingestion_schema_violations`, `pv_ingestion_range_flags{flag_type}` (latest month), `pv_ingestion_rows{stage="train_table|usable|new"}`, `pv_ingestion_data_lag_hours`, `pv_ingestion_files_uploaded` |

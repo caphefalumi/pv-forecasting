@@ -24,7 +24,8 @@ Usage::
     with job_metrics("solar-evaluate") as jm:
         jm.gauge("pv_eval_live_rmse", 0.081, {"champion_version": "3"})
         ...
-    # on exit: pv_batch_job_duration_seconds / pv_batch_job_success are added,
+    # on exit: pv_batch_job_duration_seconds / pv_batch_job_success /
+    # pv_batch_job_last_run_timestamp_seconds are added,
     # everything is exported, flushed and the provider shut down.
 """
 
@@ -148,7 +149,8 @@ class JobMetrics:
         """Recorded values (for logging and tests)."""
         return {n: [(p.value, dict(p.attributes)) for p in pts] for n, pts in self._points.items()}
 
-    def record_run(self, duration_s: float, success: bool) -> None:
+    def record_run(self, duration_s: float, success: bool, finished_at: float | None = None) -> None:
+        """Record the run's duration, outcome and end time (Unix seconds, default now)."""
         attrs = {"job_name": self.job_name}
         self.gauge(
             "pv_batch_job_duration_seconds", duration_s, attrs,
@@ -157,6 +159,10 @@ class JobMetrics:
         self.gauge(
             "pv_batch_job_success", 1 if success else 0, attrs,
             "1 if the last batch job run finished without error, else 0",
+        )
+        self.gauge(
+            "pv_batch_job_last_run_timestamp_seconds", time.time() if finished_at is None else finished_at, attrs,
+            "Unix time (seconds) when the last batch job run finished, success or not",
         )
 
     # ── Export ─────────────────────────────────────────────────────────────────

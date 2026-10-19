@@ -5,8 +5,10 @@ No network: exports go to an in-memory reader or a capturing fake exporter.
 
 from __future__ import annotations
 
+import contextlib
 import math
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -227,6 +229,31 @@ def test_gauges_have_no_unit_and_service_attribute():
         12.5, {"service": "solar-evaluate", "job_name": "solar-evaluate"},
     )
     assert got["pv_batch_job_success"]["points"][0][0] == 1
+
+
+def test_record_run_exports_last_run_timestamp():
+    jm = om.JobMetrics("solar-ingest")
+    jm.record_run(3.0, False, finished_at=1_760_000_000.5)
+    got = _export(jm)
+    ts = got["pv_batch_job_last_run_timestamp_seconds"]
+    assert ts["unit"] == "" and ts["type"] == "Gauge"
+    assert ts["points"] == [(1_760_000_000.5, {"service": "solar-ingest", "job_name": "solar-ingest"})]
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_job_metrics_sends_last_run_timestamp_at_exit(otlp_env, fail):
+    before = time.time()
+    with pytest.raises(RuntimeError) if fail else contextlib.nullcontext():
+        with om.job_metrics("solar-retrain"):
+            if fail:
+                raise RuntimeError("boom")
+    after = time.time()
+    (exp,) = CapturingExporter.instances
+    names = _exported_names(exp)
+    ((value, attrs),) = names["pv_batch_job_last_run_timestamp_seconds"]["points"]
+    assert before <= value <= after
+    assert attrs == {"service": "solar-retrain", "job_name": "solar-retrain"}
+    assert names["pv_batch_job_success"]["points"][0][0] == (0 if fail else 1)
 
 
 def test_export_through_otlp_exporter_flushes_and_shuts_down(otlp_env):

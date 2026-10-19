@@ -799,7 +799,7 @@
         "type": "prometheus",
         "uid": "grafanacloud-prom"
       },
-      "description": "pv_batch_job_duration_seconds{job_name}: wall-clock time of each run (ingest 01:00, evaluate 03:00, drift 04:00 UTC daily; retrain Sundays 02:00 UTC). A gap means the job did not run or could not export.",
+      "description": "pv_batch_job_duration_seconds{job_name}: wall-clock time of each run (ingest 01:00, evaluate 03:00, drift 04:00 UTC daily; retrain Sundays 02:00 UTC). Looks back 8 days so the weekly retrain stays visible. A gap means the job did not run or could not export.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -844,7 +844,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "last_over_time(pv_batch_job_duration_seconds{job_name=~\"solar-ingest|solar-evaluate|solar-drift|solar-retrain\"}[26h])",
+          "expr": "last_over_time(pv_batch_job_duration_seconds{job_name=~\"solar-ingest|solar-evaluate|solar-drift|solar-retrain\"}[8d])",
           "legendFormat": "{{job_name}}",
           "refId": "A"
         }
@@ -1135,6 +1135,108 @@
         }
       ],
       "title": "Latest Weekly Retrain",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "description": "Hours since each job last finished: time() - last_over_time(pv_batch_job_last_run_timestamp_seconds{job_name}[8d]) / 3600, sent by every job at exit (success or failure). Red when a daily job (ingest, evaluate, drift) has not run for more than 26h, or the weekly retrain for more than 170h (7 days + 2h). 'No data yet' means the job has not exported in the last 8 days.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 26
+              }
+            ]
+          },
+          "unit": "h",
+          "noValue": "No data yet"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 170
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
+      "id": 15,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "(time() - last_over_time(pv_batch_job_last_run_timestamp_seconds{job_name=~\"solar-ingest|solar-evaluate|solar-drift\"}[8d])) / 3600",
+          "instant": true,
+          "legendFormat": "{{job_name}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "(time() - last_over_time(pv_batch_job_last_run_timestamp_seconds{job_name=\"solar-retrain\"}[8d])) / 3600",
+          "instant": true,
+          "legendFormat": "{{job_name}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Time Since Last Run per Job (hours)",
       "type": "stat"
     }
   ],
