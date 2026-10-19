@@ -22,7 +22,6 @@ env:
   ECR_REPOSITORY: pv-forecasting-backend
   ECS_CLUSTER: pv-forecasting-cluster
   ECS_SERVICE: pv-forecasting-fastapi-service
-  ALB_NAME: pv-forecasting-alb
 
 jobs:
   build-and-push-image:
@@ -118,6 +117,25 @@ jobs:
             --region "$AWS_REGION" \
             --query "service.deployments[0].id" --output text
 
+      # The service idles at desiredCount 0 (Terraform ignores desired_count), so a deploy
+      # would leave nothing to health-check. Make sure at least one task is requested.
+      - name: Ensure at least one API task
+        run: |
+          DESIRED=$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --region "$AWS_REGION" \
+            --query "services[0].desiredCount" --output text)
+          echo "Current desiredCount: ${DESIRED}"
+          if [ "$DESIRED" = "0" ]; then
+            aws ecs update-service \
+              --cluster "$ECS_CLUSTER" \
+              --service "$ECS_SERVICE" \
+              --desired-count 1 \
+              --region "$AWS_REGION" \
+              --query "service.desiredCount" --output text
+          fi
+
       - name: Wait for ECS service to be stable
         run: |
           aws ecs wait services-stable \
@@ -131,13 +149,11 @@ jobs:
           API_URL: ${{ vars.VITE_BACKEND_API_URL }}
         run: |
           BASE_URL="${API_URL%/}"
+          # The ALB only accepts Cloudflare's IP ranges, so the runner cannot reach its
+          # hostname directly; the public API domain is the only valid health target.
           if [ -z "$BASE_URL" ]; then
-            ALB_DNS=$(aws elbv2 describe-load-balancers \
-              --names "$ALB_NAME" \
-              --query "LoadBalancers[0].DNSName" \
-              --output text \
-              --region "$AWS_REGION")
-            BASE_URL="http://${ALB_DNS}"
+            echo "::error::VITE_BACKEND_API_URL is empty on environment prod; set it to the public API URL (https://api-pv.tm-project.id.vn)"
+            exit 1
           fi
           echo "health_url=${BASE_URL}/health" >> "$GITHUB_OUTPUT"
 
@@ -154,7 +170,7 @@ jobs:
         run: |
           echo "Checking ${HEALTH_URL}"
           for _ in $(seq 1 12); do
-            if curl -fsSL --max-time 10 "$HEALTH_URL"; then
+            if curl -fsSL --connect-timeout 5 --max-time 10 "$HEALTH_URL"; then
               echo
               echo "Health check OK"
               exit 0
