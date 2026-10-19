@@ -151,5 +151,5 @@ variable "cloudflare_api_token" {
 variable "cloudflare_zone_id" {
   type        = string
   description = "Cloudflare Zone ID for tm-project.id.vn (Dashboard → Overview). Skips zone name lookup when set."
-  default     = ""
+  default     = "d57ab9087f88ee90bd2bde21e86a83f4"
 }

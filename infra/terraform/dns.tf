@@ -1,20 +1,17 @@
 # Cloudflare DNS + ACM for api.tm-project.id.vn → ALB (HTTPS)
 #
-# Auth: set env CLOUDFLARE_API_TOKEN (CI job env / local shell).
-# Do not pass api_token = "" — the provider treats empty string as invalid
-# ("must only contain a-zA-Z0-9_-") which is confusing.
+# Auth MUST be API Token (Bearer). If CLOUDFLARE_API_KEY is also in the
+# environment, the provider falls into legacy Global-Key mode and errors with
+# "Missing X-Auth-Email header". Unset CLOUDFLARE_API_KEY before terraform,
+# and pass the token via TF_VAR_cloudflare_api_token / CLOUDFLARE_API_TOKEN.
 
-provider "cloudflare" {}
-
-data "cloudflare_zone" "api" {
-  count = var.cloudflare_zone_id == "" ? 1 : 0
-  filter = {
-    name = var.cloudflare_zone_name
-  }
+provider "cloudflare" {
+  api_token = trimspace(var.cloudflare_api_token)
 }
 
+# Zone ID is provided via var (default set); no live zone lookup needed.
 locals {
-  cloudflare_zone_id = var.cloudflare_zone_id != "" ? var.cloudflare_zone_id : data.cloudflare_zone.api[0].zone_id
+  cloudflare_zone_id = var.cloudflare_zone_id
 }
 
 # CAA 0 issue "amazon.com" is managed outside Terraform (Cloudflare API) —
@@ -60,8 +57,6 @@ resource "aws_acm_certificate_validation" "api" {
 }
 
 # Orange-cloud CNAME: visitors hit Cloudflare; origin is the ALB over HTTPS (Full strict).
-# If api.* already exists in Cloudflare DNS, import it once:
-#   terraform import cloudflare_dns_record.api <zone_id>/<record_id>
 resource "cloudflare_dns_record" "api" {
   zone_id = local.cloudflare_zone_id
   name    = var.api_domain
