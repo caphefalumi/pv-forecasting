@@ -1,0 +1,121 @@
+name: Deploy MLflow
+
+# Chain: build-and-push-image (infra/docker/mlflow -> ECR pv-forecasting-mlflow) -> roll-service
+# The task definition (Terraform, modules/ecs) runs ${repo}:latest; this rolls the service only
+# when it is scaled up, since it idles at desiredCount 0 (Terraform ignores desired_count).
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "infra/docker/mlflow/**"
+      - ".github/workflows/deploy-mlflow.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-mlflow-prod
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-southeast-1
+  ECR_REPOSITORY: pv-forecasting-mlflow
+  ECS_CLUSTER: pv-forecasting-cluster
+  ECS_SERVICE: pv-forecasting-mlflow-service
+
+jobs:
+  build-and-push-image:
+    name: build-and-push-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # AWS OIDC (ECR push)
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-MLflowImage
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Image name
+        id: meta
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: echo "image=${REGISTRY}/${ECR_REPOSITORY}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./infra/docker/mlflow
+          file: ./infra/docker/mlflow/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ github.sha }}
+            ${{ steps.meta.outputs.image }}:latest
+          cache-from: type=gha,scope=mlflow
+          cache-to: type=gha,mode=max,scope=mlflow
+
+      - name: Summary
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: echo "Pushed ${IMAGE}:${GITHUB_SHA} (${DIGEST})" >> "$GITHUB_STEP_SUMMARY"
+
+  roll-service:
+    name: roll-service
+    needs: build-and-push-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: prod
+    permissions:
+      contents: read
+      id-token: write # AWS OIDC
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-DeployMLflow
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Roll the MLflow service if it is running
+        run: |
+          DESIRED=$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --region "$AWS_REGION" \
+            --query "services[0].desiredCount" --output text)
+          echo "Current desiredCount: ${DESIRED}"
+          if [ "$DESIRED" = "0" ]; then
+            echo "MLflow is scaled to 0; the next scale-up pulls :latest." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --force-new-deployment \
+            --region "$AWS_REGION" \
+            --query "service.deployments[0].id" --output text
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --region "$AWS_REGION"
