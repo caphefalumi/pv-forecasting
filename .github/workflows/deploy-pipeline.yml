@@ -1,0 +1,95 @@
+name: Deploy Pipeline
+
+# Builds the batch jobs image (root Dockerfile: ingest / evaluate / drift / retrain) and pushes
+# it to ECR pv-forecasting-pipeline as :<sha> and :latest. The pipeline_scheduler task
+# definitions run :latest, so the next Step Functions / EventBridge run picks it up.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "jobs/**"
+      - "pvdata/**"
+      - "config/**"
+      - "scripts/**"
+      - "ingest.py"
+      - "evaluate.py"
+      - "drift.py"
+      - "retrain.py"
+      - "promote.py"
+      - "requirements.txt"
+      - "Dockerfile"
+      - ".dockerignore"
+      - ".github/workflows/deploy-pipeline.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-pipeline-prod
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-southeast-1
+  ECR_REPOSITORY: pv-forecasting-pipeline
+
+jobs:
+  build-and-push-image:
+    name: build-and-push-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # AWS OIDC (ECR push)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The jobs image pulls large torch wheels; the hosted runner runs out of disk without this.
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker system prune -af
+          df -h /
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-PipelineImage
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Image name
+        id: meta
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: echo "image=${REGISTRY}/${ECR_REPOSITORY}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ github.sha }}
+            ${{ steps.meta.outputs.image }}:latest
+          cache-from: type=gha,scope=pipeline
+          cache-to: type=gha,mode=max,scope=pipeline
+
+      - name: Summary
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: echo "Pushed ${IMAGE}:${GITHUB_SHA} (${DIGEST})" >> "$GITHUB_STEP_SUMMARY"
