@@ -22,6 +22,12 @@ variable "github_repo" {
   default     = "COS40007-2026-MinhHA10-Fall26/pv-forecasting"
 }
 
+variable "github_oidc_sub_prefix" {
+  type        = string
+  description = "GitHub OIDC sub claim prefix. The repo uses immutable subjects (gh api repos/<owner>/<repo>/actions/oidc/customization/sub -> sub_claim_prefix)."
+  default     = "repo:COS40007-2026-MinhHA10-Fall26@330655750/pv-forecasting@1398967244"
+}
+
 variable "supabase_url" {
   type        = string
   description = "Supabase API URL"

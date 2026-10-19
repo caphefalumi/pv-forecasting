@@ -99,4 +99,14 @@ aws ecs update-service --cluster pv-forecasting-cluster --service pv-forecasting
 
 and set `schedules_enabled = true` in Terraform if the scheduled jobs should run.
 
+GitHub `prod` environment secret required by **Terraform Supabase**: `SUPABASE_DB_PASSWORD` (Supabase database master password, at least 4 characters; mapped to `TF_VAR_database_password`). Create it with:
+
+```bash
+gh secret set SUPABASE_DB_PASSWORD --env prod --repo COS40007-2026-MinhHA10-Fall26/pv-forecasting
+```
+
+The plan and apply jobs fail early with a clear error if it is missing.
+
+AWS OIDC: the repo uses GitHub's immutable OIDC subject, so the IAM trust matches `repo:COS40007-2026-MinhHA10-Fall26@330655750/pv-forecasting@1398967244:environment:prod` and `...:ref:refs/heads/master` (Terraform variable `github_oidc_sub_prefix`). Every AWS job must run in the `prod` environment or on `master` without an environment.
+
 GitHub `prod` environment variables used by the workflows (set manually, no longer written by CI): `VITE_BACKEND_API_URL`, `API_DOMAIN`, `FRONTEND_ORIGIN`, `CLOUDFLARE_ZONE_NAME`, `CLOUDFLARE_ZONE_ID`, `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `GRAFANA_OTLP_INSTANCE_ID`.

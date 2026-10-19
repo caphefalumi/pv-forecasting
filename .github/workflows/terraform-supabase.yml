@@ -87,9 +87,17 @@ jobs:
       TF_BACKEND_ACCESS_KEY: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
       TF_BACKEND_SECRET_KEY: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
       TF_VAR_supabase_access_token: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      TF_VAR_database_password: ${{ secrets.SUPABASE_DB_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Check required secrets
+        run: |
+          if [ -z "$TF_VAR_database_password" ]; then
+            echo "::error::SUPABASE_DB_PASSWORD secret is empty or missing on environment prod (needed for var.database_password, min 4 chars). Create it with: gh secret set SUPABASE_DB_PASSWORD --env prod --repo ${GITHUB_REPOSITORY}"
+            exit 1
+          fi
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -127,9 +135,17 @@ jobs:
       TF_BACKEND_ACCESS_KEY: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
       TF_BACKEND_SECRET_KEY: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
       TF_VAR_supabase_access_token: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      TF_VAR_database_password: ${{ secrets.SUPABASE_DB_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Check required secrets
+        run: |
+          if [ -z "$TF_VAR_database_password" ]; then
+            echo "::error::SUPABASE_DB_PASSWORD secret is empty or missing on environment prod (needed for var.database_password, min 4 chars). Create it with: gh secret set SUPABASE_DB_PASSWORD --env prod --repo ${GITHUB_REPOSITORY}"
+            exit 1
+          fi
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3

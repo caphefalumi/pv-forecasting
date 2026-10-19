@@ -3,7 +3,7 @@ variable "project_name" {
   description = "Project name prefix"
 }
 
-variable "github_repo" {
+variable "github_oidc_sub_prefix" {
   type        = string
-  description = "GitHub repository owner/name for OIDC"
+  description = "GitHub OIDC sub claim prefix (immutable subject form), e.g. repo:<owner>@<owner_id>/<repo>@<repo_id>"
 }

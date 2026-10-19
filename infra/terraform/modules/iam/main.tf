@@ -27,11 +27,11 @@ resource "aws_iam_role" "github_actions" {
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
           StringLike = {
-            # Covers branch, environment, and PR jobs from this repo
+            # Repo uses GitHub's immutable OIDC subject (repo:<owner>@<id>/<repo>@<id>:...).
+            # Only prod-environment jobs and non-environment jobs on master may assume this role.
             "token.actions.githubusercontent.com:sub" = [
-              "repo:${var.github_repo}:*",
-              "repo:${var.github_repo}:ref:refs/heads/*",
-              "repo:${var.github_repo}:environment:*",
+              "${var.github_oidc_sub_prefix}:environment:prod",
+              "${var.github_oidc_sub_prefix}:ref:refs/heads/master",
             ]
           }
           StringEquals = {

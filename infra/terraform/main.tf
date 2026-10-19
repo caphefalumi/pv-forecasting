@@ -63,9 +63,9 @@ module "ecr" {
 
 # ── Module 5: IAM Roles (GitHub OIDC & ECS) ───────────────────────────────────
 module "iam" {
-  source       = "./modules/iam"
-  project_name = var.project_name
-  github_repo  = var.github_repo
+  source                 = "./modules/iam"
+  project_name           = var.project_name
+  github_oidc_sub_prefix = var.github_oidc_sub_prefix
 }
 
 # ── Module 6: ECS Fargate Cluster & Services ──────────────────────────────────
