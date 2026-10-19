@@ -11,6 +11,7 @@ from config import settings
 from routes.health import router as health_router
 from routes.forecast import router as forecast_router
 from services.model_service import model_manager
+from services.otel import setup_otel, shutdown_otel
 from services.telemetry import telemetry_store
 
 logging.basicConfig(
@@ -38,6 +39,7 @@ async def lifespan(app: FastAPI):
         model_manager.load_model()
     yield
     logger.info("Shutting down PV Forecasting API.")
+    shutdown_otel()
 
 
 app = FastAPI(
@@ -47,6 +49,8 @@ app = FastAPI(
     openapi_tags=OPENAPI_TAGS,
     lifespan=lifespan,
 )
+
+setup_otel(app)
 
 app.add_middleware(
     CORSMiddleware,

@@ -1,13 +1,20 @@
 import base64
 import json
 import logging
-import time
+from collections.abc import Callable
 from typing import Any
-import httpx
 
 from config import settings
 
 logger = logging.getLogger(__name__)
+
+# Structured application events (e.g. forecast_served). services.otel attaches the
+# OpenTelemetry LoggingHandler here when OTLP export is configured; otherwise the
+# events are dropped, exactly as before. propagate=False keeps them off stdout.
+EVENT_LOGGER_NAME = "pv-forecasting"
+event_logger = logging.getLogger(EVENT_LOGGER_NAME)
+event_logger.setLevel(logging.INFO)
+event_logger.propagate = False
 
 LATENCY_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
 
@@ -60,6 +67,8 @@ class TelemetryStore:
             "solar-drift": 27.8,
             "solar-retrain": 310.4,
         }
+        # Set by services.otel to mirror request latency into the OTel histogram.
+        self.duration_observer: Callable[[float], None] | None = None
 
     def record_http_request(self, status_code: int, duration_sec: float) -> None:
         code_str = str(status_code)
@@ -71,6 +80,9 @@ class TelemetryStore:
         for b in LATENCY_BUCKETS:
             if duration_sec <= b:
                 self.latency_bucket_counts[b] += 1
+
+        if self.duration_observer is not None:
+            self.duration_observer(duration_sec)
 
     def check_and_record_ood(self, user_input: dict[str, Any]) -> bool:
         """Check whether array parameters fall outside the training distribution (1-100 kWp, 0-45 deg tilt)."""
@@ -167,49 +179,15 @@ def _otlp_auth_headers() -> dict[str, str]:
 
 
 async def push_log_to_otlp(event_type: str, payload: dict[str, Any]) -> None:
-    """Push structured log to Grafana Cloud via OTLP HTTP (/v1/logs)."""
-    endpoint = (settings.OTEL_EXPORTER_OTLP_ENDPOINT or "").rstrip("/")
-    auth = _otlp_auth_headers()
-    if not endpoint or "Authorization" not in auth:
-        return
+    """Emit a structured event log; exported to Grafana Cloud Loki via the OTel SDK.
 
-    ns_timestamp = str(int(time.time() * 1e9))
-    body = {
-        "resourceLogs": [
-            {
-                "resource": {
-                    "attributes": [
-                        {"key": "service.name", "value": {"stringValue": "solar-api"}},
-                        {"key": "deployment.environment", "value": {"stringValue": "prod"}},
-                    ]
-                },
-                "scopeLogs": [
-                    {
-                        "scope": {"name": "pv-forecasting"},
-                        "logRecords": [
-                            {
-                                "timeUnixNano": ns_timestamp,
-                                "severityNumber": 9,
-                                "body": {"stringValue": json.dumps({"event_type": event_type, **payload})},
-                                "attributes": [
-                                    {
-                                        "key": "event_type",
-                                        "value": {"stringValue": event_type},
-                                    }
-                                ],
-                            }
-                        ],
-                    }
-                ],
-            }
-        ]
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            await client.post(f"{endpoint}/v1/logs", headers=auth, json=body)
-    except Exception as exc:
-        logger.debug("OTLP log push skipped/failed: %s", exc)
+    Body, ``event_type`` attribute, scope name (``pv-forecasting``) and resource
+    (service.name / deployment.environment) match the previous hand-built OTLP JSON.
+    """
+    event_logger.info(
+        json.dumps({"event_type": event_type, **payload}),
+        extra={"event_type": event_type},
+    )
 
 
 # Backwards-compatible alias for older imports

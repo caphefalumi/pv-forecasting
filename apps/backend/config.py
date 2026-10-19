@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     SITE_TZ: str = "Australia/Darwin"
 
     # Grafana Cloud OTLP (https://otlp-gateway-prod-ap-southeast-1.grafana.net/otlp)
+    # service.name on every signal; Grafana maps it to the `job` / `service_name` labels.
+    OTEL_SERVICE_NAME: str = "solar-api"
     OTEL_EXPORTER_OTLP_PROTOCOL: str = "http/protobuf"
     OTEL_EXPORTER_OTLP_ENDPOINT: str = (
         "https://otlp-gateway-prod-ap-southeast-1.grafana.net/otlp"
