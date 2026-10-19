@@ -70,11 +70,13 @@ def test_otel_sdk_disabled_env_wins(monkeypatch):
     assert otel.otel_enabled() is False
 
 
-def test_export_headers_accept_literal_space(monkeypatch):
-    monkeypatch.setattr(settings, "OTEL_EXPORTER_OTLP_HEADERS", "Authorization=Basic abc=")
+@pytest.mark.parametrize("raw", ["Authorization=Basic abc+/=", "Authorization=Basic%20abc+/="])
+def test_export_headers_accept_literal_space_and_url_encoding(monkeypatch, raw):
+    monkeypatch.setattr(settings, "OTEL_EXPORTER_OTLP_HEADERS", raw)
     monkeypatch.delenv("OTEL_SDK_DISABLED", raising=False)
     assert otel.otel_enabled() is True
-    assert otel.otlp_export_headers() == {"Authorization": "Basic abc="}
+    # Exactly the auth header: no Content-Type, value URL-decoded, base64 chars intact.
+    assert otel.otlp_export_headers() == {"Authorization": "Basic abc+/="}
 
 
 def test_resource_keeps_service_name_and_environment():
@@ -84,10 +86,24 @@ def test_resource_keeps_service_name_and_environment():
     assert attrs["service.instance.id"]
 
 
+LIVE_INSTRUMENTS = {"http_requests", "http_request_duration", "pv_user_ood_rate"}
+
+
+def _set_all_mlops_values(store: TelemetryStore) -> None:
+    store.set_model_nmae("all", 0.07)
+    store.set_model_nmae("held_out_6", 0.09)
+    store.set_error_attribution("e_model", 0.4)
+    store.set_drift_score("ghi_fc", 0.12)
+    store.add_schema_violations(2)
+    store.add_range_flags("neg", 3)
+    store.set_job_duration("solar-ingest", 40.0)
+
+
 def test_registered_instrument_names_and_units(sdk_enabled):
     store = TelemetryStore()
     reader, _ = _collect(store)
     store.record_http_request(200, 0.03)
+    _set_all_mlops_values(store)
     by_name = _metrics_by_name(reader)
 
     assert set(by_name) == set(EXPECTED_INSTRUMENTS)
@@ -97,11 +113,22 @@ def test_registered_instrument_names_and_units(sdk_enabled):
     assert "pv_job_duration_seconds" not in by_name
 
 
+def test_unset_mlops_metrics_emit_no_observations(sdk_enabled):
+    store = TelemetryStore()
+    reader, _ = _collect(store)
+    store.record_http_request(200, 0.03)
+    by_name = _metrics_by_name(reader)
+
+    # Only live series are exported; model / data-quality values are unset.
+    assert set(by_name) == LIVE_INSTRUMENTS
+
+
 def test_metric_values_and_labels_match_prometheus_endpoint(sdk_enabled):
     store = TelemetryStore()
     reader, _ = _collect(store)
     store.record_http_request(200, 0.03)
     store.record_http_request(500, 2.0)
+    _set_all_mlops_values(store)
     by_name = _metrics_by_name(reader)
 
     reqs = {dict(p.attributes)["status"]: p.value for p in by_name["http_requests"].data.data_points}
@@ -115,11 +142,23 @@ def test_metric_values_and_labels_match_prometheus_endpoint(sdk_enabled):
     assert hist.count == 2
     assert dict(hist.attributes) == {"service": "solar-api"}
 
-    nmae = {p.attributes["cohort"]: p.value for p in by_name["pv_model_nmae"].data.data_points}
-    assert nmae == store.model_nmae
-    drift = {p.attributes["feature"] for p in by_name["drift_score"].data.data_points}
-    assert drift == set(store.drift_scores)
-    assert all(p.attributes["site"] == "dkasc" for p in by_name["drift_score"].data.data_points)
+    def points(name):
+        return {tuple(sorted(p.attributes.items())): p.value for p in by_name[name].data.data_points}
+
+    assert points("pv_model_nmae") == {(("cohort", "all"),): 0.07, (("cohort", "held_out_6"),): 0.09}
+    assert points("pv_error_attribution_kwh") == {(("source", "e_model"),): 0.4}
+    assert points("drift_score") == {(("feature", "ghi_fc"), ("site", "dkasc")): 0.12}
+    assert points("pv_ingestion_schema_violations") == {(): 2}
+    assert points("pv_ingestion_range_flags") == {(("flag_type", "neg"),): 3}
+
+
+def test_counter_setters_reject_negative_increments():
+    store = TelemetryStore()
+    with pytest.raises(ValueError):
+        store.add_schema_violations(-1)
+    with pytest.raises(ValueError):
+        store.add_range_flags("neg", -1)
+    assert store.schema_violations_total is None and store.range_flags_total == {}
 
 
 async def test_forecast_served_emits_exactly_one_log_record(monkeypatch, sdk_enabled):

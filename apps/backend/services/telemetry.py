@@ -3,6 +3,7 @@ import json
 import logging
 from collections.abc import Callable
 from typing import Any
+from urllib.parse import unquote
 
 from config import settings
 
@@ -37,36 +38,15 @@ class TelemetryStore:
         self.total_forecast_requests: int = 0
         self.ood_forecast_requests: int = 0
 
-        self.model_nmae: dict[str, float] = {
-            "all": 0.064,
-            "train_25": 0.058,
-            "held_out_6": 0.076,
-        }
-        self.error_attribution: dict[str, float] = {
-            "e_model": 0.42,
-            "e_forecast": 0.31,
-        }
-        self.drift_scores: dict[str, float] = {
-            "ghi_fc": 0.08,
-            "dni_fc": 0.11,
-            "temp_fc": 0.06,
-            "cloud_fc": 0.14,
-            "poa_fc": 0.09,
-        }
-        self.schema_violations_total: int = 0
-        self.range_flags_total: dict[str, int] = {
-            "missing": 12,
-            "neg": 4,
-            "over_kwp": 1,
-            "stuck": 3,
-            "day_zero": 2,
-        }
-        self.job_durations: dict[str, float] = {
-            "solar-ingest": 42.5,
-            "solar-evaluate": 18.2,
-            "solar-drift": 27.8,
-            "solar-retrain": 310.4,
-        }
+        # Model and data-quality metrics are published by batch jobs through the
+        # setters below. They stay unset, and are not exported on /metrics or OTLP,
+        # until something actually sets them: no placeholder values.
+        self.model_nmae: dict[str, float] = {}
+        self.error_attribution: dict[str, float] = {}
+        self.drift_scores: dict[str, float] = {}
+        self.schema_violations_total: int | None = None
+        self.range_flags_total: dict[str, int] = {}
+        self.job_durations: dict[str, float] = {}
         # Set by services.otel to mirror request latency into the OTel histogram.
         self.duration_observer: Callable[[float], None] | None = None
 
@@ -83,6 +63,28 @@ class TelemetryStore:
 
         if self.duration_observer is not None:
             self.duration_observer(duration_sec)
+
+    def set_model_nmae(self, cohort: str, value: float) -> None:
+        self.model_nmae[cohort] = float(value)
+
+    def set_error_attribution(self, source: str, value_kwh: float) -> None:
+        self.error_attribution[source] = float(value_kwh)
+
+    def set_drift_score(self, feature: str, value: float) -> None:
+        self.drift_scores[feature] = float(value)
+
+    def add_schema_violations(self, count: int = 1) -> None:
+        if count < 0:
+            raise ValueError("counter increments must be non-negative")
+        self.schema_violations_total = (self.schema_violations_total or 0) + count
+
+    def add_range_flags(self, flag_type: str, count: int = 1) -> None:
+        if count < 0:
+            raise ValueError("counter increments must be non-negative")
+        self.range_flags_total[flag_type] = self.range_flags_total.get(flag_type, 0) + count
+
+    def set_job_duration(self, job: str, seconds: float) -> None:
+        self.job_durations[job] = float(seconds)
 
     def check_and_record_ood(self, user_input: dict[str, Any]) -> bool:
         """Check whether array parameters fall outside the training distribution (1-100 kWp, 0-45 deg tilt)."""
@@ -123,34 +125,41 @@ class TelemetryStore:
         lines.append("# TYPE pv_user_ood_rate gauge")
         lines.append(f"pv_user_ood_rate {self.ood_rate}")
 
-        lines.append("# HELP pv_model_nmae Normalized Mean Absolute Error by array cohort")
-        lines.append("# TYPE pv_model_nmae gauge")
-        for cohort, val in self.model_nmae.items():
-            lines.append(f'pv_model_nmae{{cohort="{cohort}"}} {val}')
+        # Model / data-quality series are omitted entirely while unset.
+        if self.model_nmae:
+            lines.append("# HELP pv_model_nmae Normalized Mean Absolute Error by array cohort")
+            lines.append("# TYPE pv_model_nmae gauge")
+            for cohort, val in self.model_nmae.items():
+                lines.append(f'pv_model_nmae{{cohort="{cohort}"}} {val}')
 
-        lines.append("# HELP pv_error_attribution_kwh Error attribution between model mapping and weather forecast")
-        lines.append("# TYPE pv_error_attribution_kwh gauge")
-        for src, val in self.error_attribution.items():
-            lines.append(f'pv_error_attribution_kwh{{source="{src}"}} {val}')
+        if self.error_attribution:
+            lines.append("# HELP pv_error_attribution_kwh Error attribution between model mapping and weather forecast")
+            lines.append("# TYPE pv_error_attribution_kwh gauge")
+            for src, val in self.error_attribution.items():
+                lines.append(f'pv_error_attribution_kwh{{source="{src}"}} {val}')
 
-        lines.append("# HELP drift_score Per-feature PSI/KS covariate drift score")
-        lines.append("# TYPE drift_score gauge")
-        for feat, val in self.drift_scores.items():
-            lines.append(f'drift_score{{site="dkasc",feature="{feat}"}} {val}')
+        if self.drift_scores:
+            lines.append("# HELP drift_score Per-feature PSI/KS covariate drift score")
+            lines.append("# TYPE drift_score gauge")
+            for feat, val in self.drift_scores.items():
+                lines.append(f'drift_score{{site="dkasc",feature="{feat}"}} {val}')
 
-        lines.append("# HELP pv_ingestion_schema_violations_total Critical schema or night-irradiance violations")
-        lines.append("# TYPE pv_ingestion_schema_violations_total counter")
-        lines.append(f"pv_ingestion_schema_violations_total {self.schema_violations_total}")
+        if self.schema_violations_total is not None:
+            lines.append("# HELP pv_ingestion_schema_violations_total Critical schema or night-irradiance violations")
+            lines.append("# TYPE pv_ingestion_schema_violations_total counter")
+            lines.append(f"pv_ingestion_schema_violations_total {self.schema_violations_total}")
 
-        lines.append("# HELP pv_ingestion_range_flags_total Physical QC range flags (flagged, retained)")
-        lines.append("# TYPE pv_ingestion_range_flags_total counter")
-        for flag_type, cnt in self.range_flags_total.items():
-            lines.append(f'pv_ingestion_range_flags_total{{flag_type="{flag_type}"}} {cnt}')
+        if self.range_flags_total:
+            lines.append("# HELP pv_ingestion_range_flags_total Physical QC range flags (flagged, retained)")
+            lines.append("# TYPE pv_ingestion_range_flags_total counter")
+            for flag_type, cnt in self.range_flags_total.items():
+                lines.append(f'pv_ingestion_range_flags_total{{flag_type="{flag_type}"}} {cnt}')
 
-        lines.append("# HELP pv_job_duration_seconds Execution duration of scheduled MLOps batch jobs")
-        lines.append("# TYPE pv_job_duration_seconds gauge")
-        for job_name, dur in self.job_durations.items():
-            lines.append(f'pv_job_duration_seconds{{job="{job_name}"}} {dur}')
+        if self.job_durations:
+            lines.append("# HELP pv_job_duration_seconds Execution duration of scheduled MLOps batch jobs")
+            lines.append("# TYPE pv_job_duration_seconds gauge")
+            for job_name, dur in self.job_durations.items():
+                lines.append(f'pv_job_duration_seconds{{job="{job_name}"}} {dur}')
 
         return "\n".join(lines) + "\n"
 
@@ -159,15 +168,19 @@ telemetry_store = TelemetryStore()
 
 
 def _otlp_auth_headers() -> dict[str, str]:
-    """Build HTTP headers for Grafana Cloud OTLP gateway."""
-    headers: dict[str, str] = {"Content-Type": "application/json"}
+    """Auth headers for the Grafana Cloud OTLP gateway (used by services.otel).
+
+    Values are URL-decoded, so both ``Authorization=Basic <tok>`` and the
+    W3C-encoded ``Authorization=Basic%20<tok>`` work.
+    """
+    headers: dict[str, str] = {}
     raw = (settings.OTEL_EXPORTER_OTLP_HEADERS or "").strip()
     if raw:
         for part in raw.split(","):
             if "=" not in part:
                 continue
             key, value = part.split("=", 1)
-            headers[key.strip()] = value.strip()
+            headers[key.strip()] = unquote(value.strip())
         return headers
 
     token = (settings.GRAFANA_CLOUD_API_TOKEN or "").strip()

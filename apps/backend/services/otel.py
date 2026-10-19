@@ -51,7 +51,7 @@ _state: dict = {}
 
 def otlp_export_headers() -> dict[str, str]:
     """Auth headers for the OTLP exporters (the SDK sets its own Content-Type)."""
-    return {k: v for k, v in _otlp_auth_headers().items() if k.lower() != "content-type"}
+    return _otlp_auth_headers()
 
 
 def otel_enabled() -> bool:
@@ -75,7 +75,11 @@ def build_resource() -> Resource:
 
 
 def register_metrics(meter: Meter, store: TelemetryStore, service: str) -> None:
-    """Mirror the /metrics series as OTel instruments (single source: ``store``)."""
+    """Mirror the /metrics series as OTel instruments (single source: ``store``).
+
+    Model / data-quality instruments are registered up front but observe nothing
+    until a job sets the value on ``store``; unset series are never exported.
+    """
 
     def http_requests(_: CallbackOptions) -> Iterable[Observation]:
         for status, count in list(store.http_requests_total.items()):
@@ -97,7 +101,8 @@ def register_metrics(meter: Meter, store: TelemetryStore, service: str) -> None:
             yield Observation(val, {"site": "dkasc", "feature": feat})
 
     def schema_violations(_: CallbackOptions) -> Iterable[Observation]:
-        yield Observation(store.schema_violations_total)
+        if store.schema_violations_total is not None:  # unset -> no observation
+            yield Observation(store.schema_violations_total)
 
     def range_flags(_: CallbackOptions) -> Iterable[Observation]:
         for flag_type, cnt in store.range_flags_total.items():
@@ -144,7 +149,7 @@ def register_metrics(meter: Meter, store: TelemetryStore, service: str) -> None:
         description="Physical QC range flags (flagged, retained)",
     )
     # TODO: pv_job_duration_seconds is intentionally NOT exported over OTLP (it stays on
-    # /metrics). Its `job` attribute clashes with the `job` label Grafana Cloud derives
+    # /metrics, and only once set via TelemetryStore.set_job_duration). Its `job` attribute clashes with the `job` label Grafana Cloud derives
     # from service.name, so the per-job series would collide. Rename the attribute (e.g.
     # `job_name`) and update the dashboard query before adding it here.
 

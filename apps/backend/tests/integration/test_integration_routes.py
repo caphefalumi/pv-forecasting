@@ -1,6 +1,10 @@
+import copy
+
 import pytest
 from starlette.testclient import TestClient
+
 from main import app
+from services.telemetry import telemetry_store
 
 pytestmark = pytest.mark.integration
 
@@ -115,6 +119,16 @@ def test_forecast_endpoint_invalid_date_produces_400(client):
     assert "Invalid predict_date format" in resp.json()["detail"]
 
 
+MLOPS_SERIES = (
+    "pv_model_nmae",
+    "pv_error_attribution_kwh",
+    "drift_score",
+    "pv_ingestion_schema_violations_total",
+    "pv_ingestion_range_flags_total",
+    "pv_job_duration_seconds",
+)
+
+
 def test_prometheus_metrics_endpoint_matches_grafana_dashboards(client):
     resp = client.get("/metrics")
     assert resp.status_code == 200
@@ -122,12 +136,43 @@ def test_prometheus_metrics_endpoint_matches_grafana_dashboards(client):
     assert 'http_requests_total{service="solar-api"' in text
     assert 'http_request_duration_seconds_bucket{service="solar-api"' in text
     assert "pv_user_ood_rate" in text
-    assert 'pv_model_nmae{cohort="all"}' in text
-    assert 'pv_model_nmae{cohort="held_out_6"}' in text
-    assert 'pv_error_attribution_kwh{source="e_model"}' in text
-    assert 'drift_score{site="dkasc"' in text
-    assert "pv_ingestion_schema_violations_total" in text
-    assert "pv_job_duration_seconds" in text
+    # Model / data-quality series are not published until a job sets them.
+    for name in MLOPS_SERIES:
+        assert name not in text, name
+
+
+def test_prometheus_metrics_endpoint_exposes_values_once_set(client):
+    snapshot = {
+        attr: copy.copy(getattr(telemetry_store, attr))
+        for attr in (
+            "model_nmae",
+            "error_attribution",
+            "drift_scores",
+            "schema_violations_total",
+            "range_flags_total",
+            "job_durations",
+        )
+    }
+    try:
+        telemetry_store.set_model_nmae("all", 0.064)
+        telemetry_store.set_model_nmae("held_out_6", 0.076)
+        telemetry_store.set_error_attribution("e_model", 0.42)
+        telemetry_store.set_drift_score("ghi_fc", 0.08)
+        telemetry_store.add_schema_violations(0)
+        telemetry_store.add_range_flags("neg", 4)
+        telemetry_store.set_job_duration("solar-ingest", 42.5)
+
+        text = client.get("/metrics").text
+        assert 'pv_model_nmae{cohort="all"} 0.064' in text
+        assert 'pv_model_nmae{cohort="held_out_6"} 0.076' in text
+        assert 'pv_error_attribution_kwh{source="e_model"} 0.42' in text
+        assert 'drift_score{site="dkasc",feature="ghi_fc"} 0.08' in text
+        assert "pv_ingestion_schema_violations_total 0" in text
+        assert 'pv_ingestion_range_flags_total{flag_type="neg"} 4' in text
+        assert 'pv_job_duration_seconds{job="solar-ingest"} 42.5' in text
+    finally:
+        for attr, value in snapshot.items():
+            setattr(telemetry_store, attr, value)
 
 
 def test_telemetry_raw_endpoints_config(client):
