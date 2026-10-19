@@ -4,11 +4,17 @@ name: Terraform AWS
 # Working directory: infra/terraform (do NOT run terraform from repo root)
 # Chain: fmt -> validate -> plan (uploads tfplan) -> apply (master only, prod env, applies that exact plan)
 # Manual destroy: workflow_dispatch with action=destroy and confirm_destroy=destroy-pv-forecasting
-# (master only, prod env). Runs plan -destroy then applies that saved plan; plan/apply jobs are skipped.
-# ECR is kept on purpose: destroy targets every top-level module/resource in state except module.ecr
-# (repos + lifecycle policies), so images survive and a later apply re-adopts them (they stay in state).
-# Destroy caveats: the CI role cannot detach/delete its own IAM role/policies (DenySelfEscalation),
-# so those need an admin; the Supabase state bucket from backend.tf is never destroyed.
+# (master only, prod env). plan/apply jobs are skipped. It tears down only what costs money: ALB
+# (+ listeners, target group, and the Cloudflare api record that points at it), ECS cluster/services/
+# task definitions, Step Functions, EventBridge schedules and CloudWatch log groups. Every resource in
+# state is targeted by full address except the kept ones, and a guard fails the run if the plan would
+# delete a kept resource (-target also destroys dependents).
+# Kept on purpose: all aws_iam_* (incl. the GitHub OIDC provider and CI role), ECR (module.ecr, images
+# survive), security groups, VPC networking, ACM cert + Cloudflare acm_validation records, SSM
+# parameters, the Cloudflare zone setting, and the SQS DLQ (an IAM policy references its ARN).
+# A later apply recreates the destroyed parts and re-adopts the kept ones (they stay in state).
+# If nothing billable is left, the run ends green without planning. The Supabase state bucket
+# from backend.tf is never destroyed.
 
 on:
   push:
@@ -285,74 +291,129 @@ jobs:
             -backend-config="access_key=${TF_BACKEND_ACCESS_KEY}" \
             -backend-config="secret_key=${TF_BACKEND_SECRET_KEY}"
 
-      - name: Build destroy targets (everything except ECR)
+      - name: Build destroy targets (billable resources only)
         id: targets
         run: |
-          # terraform 1.14 has no -exclude flag, so target every top-level module/resource
-          # in state except module.ecr. -target also pulls in dependents, never dependencies;
-          # module.ecr depends on no managed resource, so it is not destroyed transitively.
-          terraform state list > state_addresses.txt
-          python3 - <<'PY'
-          import re, sys
-          addrs = [l.strip() for l in open("state_addresses.txt") if l.strip()]
-          targets, excluded = [], []
-          for a in addrs:
-              if re.search(r"(^|\.)data\.", a):
-                  continue
-              m = re.match(r"^(module\.[A-Za-z0-9_-]+)", a)
-              top = m.group(1) if m else re.sub(r"\[.*\]$", "", a)
-              if top == "module.ecr" or top.startswith("aws_ecr_"):
-                  excluded.append(a)
-                  continue
-              if top.startswith("module.") and ".aws_ecr_" in a:
-                  sys.exit(f"::error::ECR resource {a} lives outside module.ecr; refusing to target {top}")
-              if top not in targets:
-                  targets.append(top)
-          if not targets:
-              sys.exit("::error::no non-ECR resources in state; nothing to destroy")
-          with open("destroy_targets.txt", "w") as f:
-              f.write("\n".join(targets) + "\n")
-          with open("ecr_kept.txt", "w") as f:
-              f.write("\n".join(excluded) + "\n")
+          # terraform 1.14 has no -exclude flag, so every billable resource in state is
+          # targeted by full address. Keep rules live in one helper shared with the guard.
+          cat > "$RUNNER_TEMP/destroy_filter.py" <<'PY'
+          import json, re, sys
+
+          # Never destroyed: IAM (incl. OIDC provider), ECR, security groups, VPC networking,
+          # ACM, SSM parameters, the Cloudflare zone setting and ACM validation records.
+          # aws_sqs_queue is kept too: module.pipeline_scheduler's aws_iam_role_policy.eventbridge_ecs
+          # references the DLQ ARN, so destroying the queue would also delete that IAM policy
+          # (an idle SQS queue has no cost).
+          KEEP_TYPE_PREFIXES = (
+              "aws_iam_", "aws_ecr_", "aws_security_group", "aws_vpc_security_group_",
+              "aws_acm_", "aws_vpc", "aws_subnet", "aws_internet_gateway", "aws_route_table",
+              "aws_default_",
+          )
+          KEEP_TYPES = {"aws_ssm_parameter", "cloudflare_zone_setting", "aws_sqs_queue"}
+          KEEP_TYPE_NAMES = {("cloudflare_dns_record", "acm_validation")}
+
+          MODULE_PREFIX = re.compile(r'^((?:module\.[A-Za-z0-9_-]+(?:\[[^\]]*\])?\.)*)')
+          RESOURCE = re.compile(r'^(data\.)?([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)(\[.*\])?$')
+
+          def parse(addr):
+              mods = MODULE_PREFIX.match(addr).group(1)
+              m = RESOURCE.match(addr[len(mods):])
+              if not m:
+                  sys.exit(f"::error::cannot parse state address: {addr}")
+              return mods, bool(m.group(1)), m.group(2), m.group(3)
+
+          def kept(addr):
+              mods, _, rtype, name = parse(addr)
+              return (
+                  mods.startswith("module.ecr.") or mods.startswith("module.ecr[")
+                  or rtype.startswith(KEEP_TYPE_PREFIXES)
+                  or rtype in KEEP_TYPES
+                  or (rtype, name) in KEEP_TYPE_NAMES
+              )
+
+          def targets(state_list, targets_out, kept_out):
+              tgt, keep = [], []
+              for addr in (l.strip() for l in open(state_list)):
+                  if not addr or parse(addr)[1]:
+                      continue  # blank line or data source
+                  (keep if kept(addr) else tgt).append(addr)
+              open(targets_out, "w").write("".join(a + "\n" for a in tgt))
+              open(kept_out, "w").write("".join(a + "\n" for a in keep))
+
+          def guard(plan_json):
+              plan = json.load(open(plan_json))
+              deletes = [rc["address"] for rc in plan.get("resource_changes") or []
+                         if "delete" in rc["change"]["actions"]]
+              bad = [a for a in deletes if kept(a)]
+              print("\n".join(deletes))
+              if bad:
+                  print("::error::destroy plan would delete kept resources:", file=sys.stderr)
+                  print("\n".join(bad), file=sys.stderr)
+                  sys.exit(1)
+
+          if __name__ == "__main__":
+              {"targets": targets, "guard": guard}[sys.argv[1]](*sys.argv[2:])
           PY
+
+          terraform state list > state_addresses.txt
+          python3 "$RUNNER_TEMP/destroy_filter.py" targets state_addresses.txt destroy_targets.txt kept.txt
+          rm -f state_addresses.txt
           {
-            echo "### Kept on destroy (ECR)"
+            echo "### Kept on destroy (IAM / ECR / SG / ACM / SSM / zone setting / DLQ)"
             echo ""
-            sed 's/^/- `/; s/$/`/' ecr_kept.txt
+            sed 's/^/- `/; s/$/`/' kept.txt
             echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ ! -s destroy_targets.txt ]; then
+            echo "Nothing billable left to destroy" >> "$GITHUB_STEP_SUMMARY"
+            echo "Nothing billable left to destroy"
+            echo "has_targets=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          {
             echo "### Destroy targets"
             echo ""
             sed 's/^/- `/; s/$/`/' destroy_targets.txt
+            echo ""
           } >> "$GITHUB_STEP_SUMMARY"
-          rm -f state_addresses.txt
+          echo "has_targets=true" >> "$GITHUB_OUTPUT"
 
-      - name: terraform plan -destroy (excluding ECR)
+      - name: terraform plan -destroy (billable resources only)
+        if: steps.targets.outputs.has_targets == 'true'
         run: |
           args=()
           while IFS= read -r t; do
             [ -n "$t" ] && args+=("-target=$t")
           done < destroy_targets.txt
-          terraform plan -destroy -input=false -no-color "${args[@]}" -out=destroy.tfplan
-
-      - name: Verify plan keeps ECR
-        run: |
-          ecr_deletes="$(terraform show -json destroy.tfplan \
-            | jq -r '.resource_changes[]? | select(((.type | startswith("aws_ecr_")) or (.address | startswith("module.ecr."))) and (.change.actions | index("delete"))) | .address')"
-          if [ -n "$ecr_deletes" ]; then
-            echo "::error::destroy plan would delete ECR resources:"
-            echo "$ecr_deletes"
+          if [ "${#args[@]}" -eq 0 ]; then
+            echo "::error::no targets; refusing to run an untargeted plan -destroy"
             exit 1
           fi
+          terraform plan -destroy -input=false -no-color "${args[@]}" -out=destroy.tfplan
+
+      - name: Verify plan deletes no kept resource
+        if: steps.targets.outputs.has_targets == 'true'
+        run: |
+          terraform show -json destroy.tfplan > "$RUNNER_TEMP/destroy_plan.json"
+          python3 "$RUNNER_TEMP/destroy_filter.py" guard "$RUNNER_TEMP/destroy_plan.json" > planned_deletes.txt
+          rm -f "$RUNNER_TEMP/destroy_plan.json"
+          {
+            echo "### Planned deletes"
+            echo ""
+            sed 's/^/- `/; s/$/`/' planned_deletes.txt
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Destroy plan summary
+        if: steps.targets.outputs.has_targets == 'true'
         run: |
           summary="$(terraform show -no-color destroy.tfplan | grep -E '^(Plan:|No changes)' || true)"
           {
-            echo ""
-            echo "### Terraform AWS destroy plan (ECR kept)"
+            echo "### Terraform AWS destroy plan (billable only)"
             echo ""
             echo "${summary:-no Plan line found}"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: terraform apply (saved destroy plan)
+        if: steps.targets.outputs.has_targets == 'true'
         run: terraform apply -input=false -no-color destroy.tfplan
