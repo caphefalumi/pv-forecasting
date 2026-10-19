@@ -168,6 +168,9 @@ resource "aws_ecs_task_definition" "mlflow" {
         "0.0.0.0",
         "--port",
         "5000",
+        # MLflow 3.x defaults to 4 uvicorn workers, which OOM-kills the 1 GB task.
+        "--workers",
+        "1",
         "--default-artifact-root",
         var.mlflow_artifact_root
       ]
