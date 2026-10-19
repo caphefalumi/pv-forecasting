@@ -20,6 +20,29 @@ resource "aws_ecs_cluster_capacity_providers" "main" {
 }
 
 # ── 1. FastAPI Prediction Service (Table 20: solar-api, 0.5 vCPU / 1 GB) ─────
+# Grafana Cloud credentials live in SSM Parameter Store (SecureString, AWS-managed aws/ssm
+# key) instead of plain task-definition environment. Shared with the pipeline task definitions.
+resource "aws_ssm_parameter" "otel_exporter_otlp_headers" {
+  name        = "${var.project_name}-otel-exporter-otlp-headers"
+  description = "OTEL_EXPORTER_OTLP_HEADERS for Grafana Cloud OTLP"
+  type        = "SecureString"
+  value       = var.otel_exporter_otlp_headers
+}
+
+resource "aws_ssm_parameter" "grafana_cloud_api_token" {
+  name        = "${var.project_name}-grafana-cloud-api-token"
+  description = "GRAFANA_CLOUD_API_TOKEN for Grafana Cloud"
+  type        = "SecureString"
+  value       = var.grafana_cloud_api_token
+}
+
+locals {
+  grafana_secrets = [
+    { name = "OTEL_EXPORTER_OTLP_HEADERS", valueFrom = aws_ssm_parameter.otel_exporter_otlp_headers.arn },
+    { name = "GRAFANA_CLOUD_API_TOKEN", valueFrom = aws_ssm_parameter.grafana_cloud_api_token.arn }
+  ]
+}
+
 resource "aws_cloudwatch_log_group" "fastapi" {
   name              = "/ecs/${var.project_name}-solar-api"
   retention_in_days = 30
@@ -64,10 +87,11 @@ resource "aws_ecs_task_definition" "fastapi" {
         { name = "AWS_ENDPOINT_URL_S3", value = var.supabase_s3_endpoint },
         { name = "OTEL_EXPORTER_OTLP_PROTOCOL", value = var.otel_exporter_otlp_protocol },
         { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = var.otel_exporter_otlp_endpoint },
-        { name = "OTEL_EXPORTER_OTLP_HEADERS", value = var.otel_exporter_otlp_headers },
-        { name = "GRAFANA_OTLP_INSTANCE_ID", value = var.grafana_otlp_instance_id },
-        { name = "GRAFANA_CLOUD_API_TOKEN", value = var.grafana_cloud_api_token }
+        { name = "GRAFANA_OTLP_INSTANCE_ID", value = var.grafana_otlp_instance_id }
       ]
+
+      # Injected by the ECS agent at task start (execution role reads the SSM parameters).
+      secrets = local.grafana_secrets
 
       logConfiguration = {
         logDriver = "awslogs"

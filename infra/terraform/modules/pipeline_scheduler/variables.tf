@@ -92,11 +92,13 @@ variable "otel_exporter_otlp_endpoint" {
   default     = "https://otlp-gateway-prod-ap-southeast-1.grafana.net/otlp"
 }
 
-variable "otel_exporter_otlp_headers" {
-  type        = string
-  description = "OTLP Authorization header (Authorization=Basic ...)"
-  sensitive   = true
-  default     = ""
+variable "grafana_secrets" {
+  type = list(object({
+    name      = string
+    valueFrom = string
+  }))
+  description = "ECS container secrets (SSM parameter ARNs) for the Grafana Cloud credentials"
+  default     = []
 }
 
 variable "grafana_otlp_instance_id" {
@@ -105,12 +107,6 @@ variable "grafana_otlp_instance_id" {
   default     = "1846261"
 }
 
-variable "grafana_cloud_api_token" {
-  type        = string
-  description = "Grafana Cloud API token for OTLP"
-  sensitive   = true
-  default     = ""
-}
 
 variable "schedules_enabled" {
   type        = bool

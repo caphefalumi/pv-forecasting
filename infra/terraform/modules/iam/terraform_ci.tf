@@ -4,7 +4,9 @@
 #   * terraform-write - the create/update/delete actions `terraform apply` needs
 # Scoped to this account, the deploy region and "${var.project_name}-*" names wherever the
 # service supports resource-level permissions; Describe/List APIs that do not are left on "*".
-# The DenySelfEscalation statement blocks CI from editing its own role or these two policies;
+# A third policy, terraform-ssm, holds SSM Parameter Store access (terraform-write is at the
+# 6,144-character limit). The DenySelfEscalation statement blocks CI from editing its own role
+# or any <prefix>-terraform-* policy;
 # apply changes to them locally (terraform apply -target=...) with admin credentials.
 
 data "aws_caller_identity" "current" {}
@@ -52,6 +54,7 @@ resource "aws_iam_policy" "terraform_read" {
           "states:ValidateStateMachineDefinition",
           "scheduler:ListSchedules",
           "sqs:ListQueues",
+          "ssm:DescribeParameters",
           "iam:ListOpenIDConnectProviders"
         ]
         Resource = "*"
@@ -171,8 +174,7 @@ resource "aws_iam_policy" "terraform_write" {
         ]
         Resource = [
           aws_iam_role.github_actions.arn,
-          "arn:aws:iam::${local.account_id}:policy/${local.prefix}-terraform-read",
-          "arn:aws:iam::${local.account_id}:policy/${local.prefix}-terraform-write"
+          "arn:aws:iam::${local.account_id}:policy/${local.prefix}-terraform-*"
         ]
       },
       {
@@ -411,6 +413,34 @@ resource "aws_iam_policy" "terraform_write" {
   })
 }
 
+# terraform-write is at IAM's 6,144-character managed-policy limit, so newer services get
+# their own policy. Covered by the DenySelfEscalation wildcard on policy/<prefix>-terraform-*.
+resource "aws_iam_policy" "terraform_ssm" {
+  name        = "${var.project_name}-terraform-ssm"
+  description = "SSM Parameter Store access Terraform needs for the ${var.project_name} AWS stack"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # SecureString parameters use the AWS-managed aws/ssm key, so no KMS grant is needed.
+        Sid    = "SsmParameters"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters",
+          "ssm:ListTagsForResource",
+          "ssm:PutParameter",
+          "ssm:DeleteParameter",
+          "ssm:AddTagsToResource",
+          "ssm:RemoveTagsFromResource"
+        ]
+        Resource = "arn:aws:ssm:${local.arn_ctx}:parameter/${local.prefix}-*"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role_policy_attachment" "github_actions_terraform_read" {
   role       = aws_iam_role.github_actions.name
   policy_arn = aws_iam_policy.terraform_read.arn
@@ -419,4 +449,9 @@ resource "aws_iam_role_policy_attachment" "github_actions_terraform_read" {
 resource "aws_iam_role_policy_attachment" "github_actions_terraform_write" {
   role       = aws_iam_role.github_actions.name
   policy_arn = aws_iam_policy.terraform_write.arn
+}
+
+resource "aws_iam_role_policy_attachment" "github_actions_terraform_ssm" {
+  role       = aws_iam_role.github_actions.name
+  policy_arn = aws_iam_policy.terraform_ssm.arn
 }

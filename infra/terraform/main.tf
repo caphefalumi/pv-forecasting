@@ -116,8 +116,7 @@ module "pipeline_scheduler" {
   supabase_s3_secret_key      = var.supabase_s3_secret_key
   otel_exporter_otlp_protocol = var.otel_exporter_otlp_protocol
   otel_exporter_otlp_endpoint = var.otel_exporter_otlp_endpoint
-  otel_exporter_otlp_headers  = var.otel_exporter_otlp_headers
   grafana_otlp_instance_id    = var.grafana_otlp_instance_id
-  grafana_cloud_api_token     = var.grafana_cloud_api_token
+  grafana_secrets             = module.ecs.grafana_secrets
   schedules_enabled           = var.schedules_enabled
 }

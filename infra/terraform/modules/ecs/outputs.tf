@@ -13,6 +13,11 @@ output "service_name" {
   value       = aws_ecs_service.fastapi.name
 }
 
+output "grafana_secrets" {
+  description = "ECS container secrets entries for the Grafana Cloud credentials (SSM ARNs, not values)"
+  value       = local.grafana_secrets
+}
+
 output "mlflow_service_name" {
   description = "MLflow ECS Service Name"
   value       = aws_ecs_service.mlflow.name

@@ -116,9 +116,7 @@ locals {
     { name = "AWS_ENDPOINT_URL_S3", value = var.supabase_s3_endpoint },
     { name = "OTEL_EXPORTER_OTLP_PROTOCOL", value = var.otel_exporter_otlp_protocol },
     { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = var.otel_exporter_otlp_endpoint },
-    { name = "OTEL_EXPORTER_OTLP_HEADERS", value = var.otel_exporter_otlp_headers },
-    { name = "GRAFANA_OTLP_INSTANCE_ID", value = var.grafana_otlp_instance_id },
-    { name = "GRAFANA_CLOUD_API_TOKEN", value = var.grafana_cloud_api_token }
+    { name = "GRAFANA_OTLP_INSTANCE_ID", value = var.grafana_otlp_instance_id }
   ]
 
   ecs_network_config = {
@@ -149,6 +147,7 @@ resource "aws_ecs_task_definition" "solar_ingest" {
       essential   = true
       command     = ["python", "ingest.py"]
       environment = local.common_env
+      secrets     = var.grafana_secrets
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -178,6 +177,7 @@ resource "aws_ecs_task_definition" "solar_evaluate" {
       essential   = true
       command     = ["python", "evaluate.py"]
       environment = local.common_env
+      secrets     = var.grafana_secrets
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -207,6 +207,7 @@ resource "aws_ecs_task_definition" "solar_drift" {
       essential   = true
       command     = ["python", "drift.py"]
       environment = local.common_env
+      secrets     = var.grafana_secrets
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -236,6 +237,7 @@ resource "aws_ecs_task_definition" "solar_retrain" {
       essential   = true
       command     = ["python", "retrain.py"]
       environment = local.common_env
+      secrets     = var.grafana_secrets
       logConfiguration = {
         logDriver = "awslogs"
         options = {

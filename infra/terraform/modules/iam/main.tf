@@ -112,6 +112,28 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_standard" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# Lets the ECS agent inject the Grafana Cloud credentials (SSM SecureString, AWS-managed
+# aws/ssm key, so no kms:Decrypt grant is needed). Names match modules/ecs aws_ssm_parameter.
+resource "aws_iam_role_policy" "ecs_execution_ssm" {
+  name = "${var.project_name}-ecs-execution-ssm"
+  role = aws_iam_role.ecs_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ReadGrafanaSecrets"
+        Effect = "Allow"
+        Action = ["ssm:GetParameters"]
+        Resource = [
+          "arn:aws:ssm:${local.arn_ctx}:parameter/${local.prefix}-otel-exporter-otlp-headers",
+          "arn:aws:ssm:${local.arn_ctx}:parameter/${local.prefix}-grafana-cloud-api-token"
+        ]
+      }
+    ]
+  })
+}
+
 # ── ECS Task Role (no AWS S3 — data lives on Supabase Storage) ────────────────
 resource "aws_iam_role" "ecs_task" {
   name = "${var.project_name}-ecs-task-role"
