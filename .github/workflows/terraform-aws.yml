@@ -1,11 +1,12 @@
 name: Terraform AWS
 
 # Remote state: Supabase Storage S3-compatible backend (bucket terraform-state / aws/terraform.tfstate)
-# Working directory: infra/terraform  (do NOT run terraform from repo root)
+# Working directory: infra/terraform (do NOT run terraform from repo root)
+# Chain: fmt -> validate -> plan (uploads tfplan) -> apply (master only, prod env, applies that exact plan)
 
 on:
   push:
-    branches: [main, master]
+    branches: [master]
     paths:
       - "infra/terraform/**"
       - "!infra/terraform/supabase/**"
@@ -18,28 +19,82 @@ on:
   workflow_dispatch:
     inputs:
       apply:
-        description: "Run terraform apply after plan"
+        description: "Apply the plan (master only)"
         type: boolean
-        default: true
+        default: false
 
 permissions:
-  id-token: write
   contents: read
-  actions: write
+
+# One run at a time against the shared state; never cancel a running apply.
+concurrency:
+  group: terraform-aws
+  cancel-in-progress: false
 
 env:
   AWS_REGION: ap-south-1
+  TF_VERSION: "1.14.3"
   TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+defaults:
+  run:
+    working-directory: infra/terraform
 
 jobs:
-  terraform:
-    name: fmt → init → validate → plan → apply
+  fmt:
+    name: fmt
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform fmt -check
+        run: terraform fmt -check -recursive -diff
+
+  validate:
+    name: validate
+    needs: fmt
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform init (no backend)
+        run: terraform init -backend=false
+
+      - name: terraform validate
+        run: terraform validate
+
+  plan:
+    name: plan
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # prod holds the env-scoped secrets/vars the plan needs (no protection rules today).
     environment: prod
-    defaults:
-      run:
-        working-directory: infra/terraform
+    permissions:
+      contents: read
+      id-token: write # AWS OIDC
     env:
+      TF_BACKEND_ACCESS_KEY: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
+      TF_BACKEND_SECRET_KEY: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       TF_VAR_grafana_cloud_api_token: ${{ secrets.GRAFANA_CLOUD_API_TOKEN }}
       TF_VAR_otel_exporter_otlp_headers: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
       TF_VAR_supabase_service_role_key: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -53,76 +108,91 @@ jobs:
       TF_VAR_api_domain: ${{ vars.API_DOMAIN }}
       TF_VAR_cloudflare_zone_name: ${{ vars.CLOUDFLARE_ZONE_NAME }}
       TF_VAR_cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure Cloudflare API token (Bearer only)
-        env:
-          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Check Cloudflare API token
         run: |
-          # Legacy CLOUDFLARE_API_KEY forces Global-Key auth → "Missing X-Auth-Email"
-          unset CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL || true
-          if [ -z "$TOKEN" ]; then
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
             echo "::error::CLOUDFLARE_API_TOKEN secret is empty on environment prod"
             exit 1
           fi
-          echo "CLOUDFLARE_API_TOKEN length=${#TOKEN}"
-          # Expose to subsequent steps (job-level env can't reference secrets for TF_VAR easily here)
-          echo "CLOUDFLARE_API_TOKEN=$TOKEN" >> "$GITHUB_ENV"
-          echo "TF_VAR_cloudflare_api_token=$TOKEN" >> "$GITHUB_ENV"
 
-      - name: Configure AWS Credentials (OIDC)
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          role-session-name: GitHubActions-TerraformAWS
+          role-session-name: GitHubActions-TerraformAWS-Plan
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.14.3"
+          terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
-      - name: Terraform fmt -check
-        run: terraform fmt -check -recursive
-
-      - name: Terraform init (Supabase S3 backend)
+      - name: terraform init (Supabase S3 backend)
         run: |
-          terraform init -input=false \
-            -backend-config="access_key=${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}" \
-            -backend-config="secret_key=${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}"
+          terraform init \
+            -backend-config="access_key=${TF_BACKEND_ACCESS_KEY}" \
+            -backend-config="secret_key=${TF_BACKEND_SECRET_KEY}"
 
-      - name: Terraform validate
-        run: |
-          unset CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL || true
-          terraform validate
+      - name: terraform plan
+        run: terraform plan -no-color -out=tfplan
 
-      - name: Terraform plan
-        id: plan
-        run: |
-          unset CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL || true
-          terraform plan -input=false -no-color -out=tfplan
+      - name: Upload plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-aws
+          path: infra/terraform/tfplan
+          retention-days: 1 # the plan file contains variable values
+          if-no-files-found: error
 
-      - name: Terraform apply
-        if: >-
-          github.event_name == 'workflow_dispatch' && inputs.apply ||
-          (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
-        run: |
-          unset CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL || true
-          terraform apply -input=false -auto-approve -no-color tfplan
+  apply:
+    name: apply
+    needs: plan
+    if: >-
+      github.ref == 'refs/heads/master' &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.apply))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: prod
+    permissions:
+      contents: read
+      id-token: write # AWS OIDC
+    env:
+      TF_BACKEND_ACCESS_KEY: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
+      TF_BACKEND_SECRET_KEY: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Publish API URL + frontend origin to GitHub env vars
-        if: >-
-          github.event_name == 'workflow_dispatch' && inputs.apply ||
-          (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-TerraformAWS-Apply
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform init (Supabase S3 backend)
         run: |
-          API_URL=$(terraform output -raw api_url)
-          gh variable set VITE_BACKEND_API_URL --env prod --body "$API_URL" --repo "$GITHUB_REPOSITORY"
-          gh variable set FRONTEND_ORIGIN --env prod --body "https://pv-forecasting.vercel.app" --repo "$GITHUB_REPOSITORY"
-          echo "Set VITE_BACKEND_API_URL=$API_URL"
-          echo "Set FRONTEND_ORIGIN=https://pv-forecasting.vercel.app"
+          terraform init \
+            -backend-config="access_key=${TF_BACKEND_ACCESS_KEY}" \
+            -backend-config="secret_key=${TF_BACKEND_SECRET_KEY}"
+
+      - name: Download plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-aws
+          path: infra/terraform
+
+      - name: terraform apply (saved plan)
+        run: terraform apply -auto-approve -no-color tfplan
