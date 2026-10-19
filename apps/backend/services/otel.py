@@ -148,10 +148,10 @@ def register_metrics(meter: Meter, store: TelemetryStore, service: str) -> None:
         callbacks=[range_flags],
         description="Physical QC range flags (flagged, retained)",
     )
-    # TODO: pv_job_duration_seconds is intentionally NOT exported over OTLP (it stays on
-    # /metrics, and only once set via TelemetryStore.set_job_duration). Its `job` attribute clashes with the `job` label Grafana Cloud derives
-    # from service.name, so the per-job series would collide. Rename the attribute (e.g.
-    # `job_name`) and update the dashboard query before adding it here.
+    # pv_job_duration_seconds is intentionally NOT exported over OTLP (it stays on
+    # /metrics, and only once set via TelemetryStore.set_job_duration): its `job` attribute
+    # clashes with the `job` label Grafana Cloud derives from service.name. The batch jobs
+    # export pv_batch_job_duration_seconds{job_name} themselves (jobs/common/otel_metrics.py).
 
 
 def setup_otel(app: FastAPI) -> bool:

@@ -69,8 +69,22 @@ Failed scheduled invocations are routed to the SQS Dead-Letter Queue (`pv-foreca
 |---|---|---|---|
 | **Infrastructure** | ECS CPU utilization, memory utilization, running task count, ALB healthy hosts | CloudWatch Container Insights & Grafana | `pv_forecasting_infra_service.json` |
 | **Service** | Request rate, HTTP 4xx/5xx error rate, p50/p95/p99 latency (`http_request_duration_seconds`) | Prometheus `/metrics` → Grafana Cloud | `pv_forecasting_infra_service.json` |
-| **Data Quality** | Schema violations (`pv_ingestion_schema_violations_total`), physical QC range flags (`missing`, `neg`, `over_kwp`, `stuck`, `day_zero`) | Prometheus + Discord Critical Alert | `pv_forecasting_overview.json` |
-| **Model & Drift** | Fleet nMAE (`all`, `train_25`, `held_out_6`), error attribution ($e_{\text{model}}$ vs. $e_{\text{forecast}}$), per-feature KS drift (`drift_score`), user OOD rate (`pv_user_ood_rate`) | Prometheus → Grafana Cloud + S3 `.md` reports | `pv_forecasting_overview.json` |
+| **Data Quality** | Schema violations (`pv_ingestion_schema_violations`), QC flag counts per type (`pv_ingestion_range_flags{flag_type="missing|neg|over_kwp|stuck|day_zero"}`), rows per stage (`pv_ingestion_rows`), data lag (`pv_ingestion_data_lag_hours`) | `solar-ingest` → OTLP → Grafana Cloud | `pv_forecasting_overview.json` |
+| **Model & Drift** | Live RMSE / MAE / R² and ratio to champion test RMSE (`pv_eval_*`), retrain decision (`pv_eval_needs_retrain`), KS drift share (`drift_score{feature="all"}`), per-feature KS (`pv_drift_feature_ks_stat{feature}`), target PSI (`pv_drift_target_psi`), weekly retrain (`pv_retrain_*`), job health (`pv_batch_job_duration_seconds` / `pv_batch_job_success{job_name}`), user OOD rate (`pv_user_ood_rate`) | Batch jobs → OTLP → Grafana Cloud; MLflow runs; API `/metrics` for OOD | `pv_forecasting_overview.json` |
+
+### 4.1.1 Batch Job Metrics (OTLP)
+
+The ingest, evaluate, drift and retrain jobs run as separate ECS tasks, so each one pushes its own results with `jobs/common/otel_metrics.py` right before it exits: one OTLP/HTTP (protobuf) export to `{OTEL_EXPORTER_OTLP_ENDPOINT}/v1/metrics`, authenticated with `OTEL_EXPORTER_OTLP_HEADERS` (URL-decoded, as in the API). `service.name` is the task name (`solar-ingest`, `solar-evaluate`, `solar-drift`, `solar-retrain`) and every point carries `service=<task name>`. Export is skipped when OTLP auth is missing, when `OTEL_SDK_DISABLED=true`, and on `--dry-run`. Export errors are logged and never change the job's exit code.
+
+All job metrics are gauges with no unit, so Grafana Cloud keeps the names unchanged. Because each job reports once per run, dashboard queries wrap them in `last_over_time(...[26h])` (daily jobs) or `[8d]` (weekly retrain).
+
+| Job | Metrics |
+|---|---|
+| all | `pv_batch_job_duration_seconds{job_name}`, `pv_batch_job_success{job_name}` (0/1) |
+| `solar-evaluate` | `pv_eval_live_rmse`, `pv_eval_live_mae`, `pv_eval_live_r2`, `pv_eval_champion_test_rmse`, `pv_eval_rmse_ratio` (when a champion baseline exists), `pv_eval_needs_retrain` — all with `champion_version` |
+| `solar-drift` | `drift_score{feature="all"}` (share of KS-drifted features), `pv_drift_feature_ks_stat{feature}`, `pv_drift_n_features_drifted`, `pv_drift_n_features_tested`, `pv_drift_target_psi{feature="target_norm"}`, `pv_drift_detected`; MLflow also gets `ks_stat_<feature>` |
+| `solar-ingest` | `pv_ingestion_schema_violations`, `pv_ingestion_range_flags{flag_type}` (latest month), `pv_ingestion_rows{stage="train_table|usable|new"}`, `pv_ingestion_data_lag_hours`, `pv_ingestion_files_uploaded` |
+| `solar-retrain` | `pv_retrain_test_rmse`, `pv_retrain_champion_test_rmse`, `pv_retrain_candidate_promoted` (0/1, `candidate` alias assigned) — with `model_version` |
 
 ### 4.2 Drift Taxonomy & Alert Matrix
 

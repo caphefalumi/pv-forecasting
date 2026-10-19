@@ -38,9 +38,11 @@ class TelemetryStore:
         self.total_forecast_requests: int = 0
         self.ood_forecast_requests: int = 0
 
-        # Model and data-quality metrics are published by batch jobs through the
-        # setters below. They stay unset, and are not exported on /metrics or OTLP,
-        # until something actually sets them: no placeholder values.
+        # Model and data-quality series. The batch jobs (ingest / evaluate / drift /
+        # retrain) run as separate ECS tasks and push their real results to Grafana
+        # themselves over OTLP (jobs/common/otel_metrics.py), so nothing in production
+        # calls the setters below. They are kept for in-process use and tests; while
+        # unset they are not exported on /metrics or OTLP: no placeholder values.
         self.model_nmae: dict[str, float] = {}
         self.error_attribution: dict[str, float] = {}
         self.drift_scores: dict[str, float] = {}
