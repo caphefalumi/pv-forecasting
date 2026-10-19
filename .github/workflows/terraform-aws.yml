@@ -3,6 +3,11 @@ name: Terraform AWS
 # Remote state: Supabase Storage S3-compatible backend (bucket terraform-state / aws/terraform.tfstate)
 # Working directory: infra/terraform (do NOT run terraform from repo root)
 # Chain: fmt -> validate -> plan (uploads tfplan) -> apply (master only, prod env, applies that exact plan)
+# Manual destroy: workflow_dispatch with action=destroy and confirm_destroy=destroy-pv-forecasting
+# (master only, prod env). Runs plan -destroy then applies that saved plan; plan/apply jobs are skipped.
+# Destroy caveats: ECR repos (modules/ecr) have no force_delete and fail while they hold images; the
+# CI role cannot detach/delete its own IAM role/policies (DenySelfEscalation), so those need an admin;
+# the Supabase state bucket from backend.tf is never destroyed.
 
 on:
   push:
@@ -18,10 +23,19 @@ on:
       - ".github/workflows/terraform-aws.yml"
   workflow_dispatch:
     inputs:
-      apply:
-        description: "Apply the plan (master only)"
-        type: boolean
-        default: false
+      action:
+        description: "plan = plan only; apply = plan + apply (master only); destroy = plan -destroy + apply (master only)"
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+        default: plan
+      confirm_destroy:
+        description: "Required for action=destroy: type destroy-pv-forecasting"
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -83,6 +97,7 @@ jobs:
   plan:
     name: plan
     needs: validate
+    if: github.event_name != 'workflow_dispatch' || inputs.action != 'destroy'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # prod holds the env-scoped secrets/vars the plan needs (no protection rules today).
@@ -154,7 +169,7 @@ jobs:
     needs: plan
     if: >-
       github.ref == 'refs/heads/master' &&
-      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.apply))
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.action == 'apply'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: prod
@@ -196,3 +211,90 @@ jobs:
 
       - name: terraform apply (saved plan)
         run: terraform apply -auto-approve -no-color tfplan
+
+  destroy:
+    name: destroy
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: prod
+    permissions:
+      contents: read
+      id-token: write # AWS OIDC
+    env:
+      TF_BACKEND_ACCESS_KEY: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
+      TF_BACKEND_SECRET_KEY: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      TF_VAR_grafana_cloud_api_token: ${{ secrets.GRAFANA_CLOUD_API_TOKEN }}
+      TF_VAR_otel_exporter_otlp_headers: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+      TF_VAR_supabase_service_role_key: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      TF_VAR_mlflow_tracking_uri: ${{ secrets.MLFLOW_TRACKING_URI }}
+      TF_VAR_supabase_s3_access_key: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
+      TF_VAR_supabase_s3_secret_key: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
+      TF_VAR_supabase_url: ${{ secrets.SUPABASE_URL }}
+      TF_VAR_otel_exporter_otlp_protocol: ${{ vars.OTEL_EXPORTER_OTLP_PROTOCOL }}
+      TF_VAR_otel_exporter_otlp_endpoint: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
+      TF_VAR_grafana_otlp_instance_id: ${{ vars.GRAFANA_OTLP_INSTANCE_ID }}
+      TF_VAR_api_domain: ${{ vars.API_DOMAIN }}
+      TF_VAR_cloudflare_zone_name: ${{ vars.CLOUDFLARE_ZONE_NAME }}
+      TF_VAR_cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
+    steps:
+      - name: Guard (master only + confirm phrase)
+        working-directory: .
+        env:
+          CONFIRM_DESTROY: ${{ inputs.confirm_destroy }}
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$REF" != "refs/heads/master" ]; then
+            echo "::error::destroy may only run from refs/heads/master (got $REF)"
+            exit 1
+          fi
+          if [ "$CONFIRM_DESTROY" != "destroy-pv-forecasting" ]; then
+            echo "::error::confirm_destroy must be exactly 'destroy-pv-forecasting'"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check Cloudflare API token
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN secret is empty on environment prod"
+            exit 1
+          fi
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-TerraformAWS-Destroy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform init (Supabase S3 backend)
+        run: |
+          terraform init \
+            -backend-config="access_key=${TF_BACKEND_ACCESS_KEY}" \
+            -backend-config="secret_key=${TF_BACKEND_SECRET_KEY}"
+
+      - name: terraform plan -destroy
+        run: terraform plan -destroy -input=false -no-color -out=destroy.tfplan
+
+      - name: Destroy plan summary
+        run: |
+          summary="$(terraform show -no-color destroy.tfplan | grep -E '^(Plan:|No changes)' || true)"
+          {
+            echo "### Terraform AWS destroy plan"
+            echo ""
+            echo "${summary:-no Plan line found}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: terraform apply (saved destroy plan)
+        run: terraform apply -input=false -no-color destroy.tfplan
