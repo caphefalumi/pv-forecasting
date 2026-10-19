@@ -40,7 +40,8 @@ resource "cloudflare_dns_record" "acm_validation" {
   }
 
   zone_id = local.cloudflare_zone_id
-  name    = each.value.name
+  # Cloudflare stores names without the trailing dot ACM returns; keep it off to avoid perpetual drift.
+  name    = trimsuffix(each.value.name, ".")
   type    = each.value.type
   content = trimsuffix(each.value.value, ".")
   ttl     = 60
