@@ -138,7 +138,7 @@ variable "frontend_origin" {
 variable "api_domain" {
   type        = string
   description = "Public API hostname (Cloudflare → ALB)"
-  default     = "api.tm-project.id.vn"
+  default     = "api-pv.tm-project.id.vn"
 }
 
 variable "cloudflare_zone_name" {
