@@ -104,7 +104,8 @@ jobs:
   plan:
     name: plan
     needs: validate
-    if: github.event_name != 'workflow_dispatch' || inputs.action != 'destroy'
+    # Dependabot runs get no secrets, so skip the secret-backed jobs for them.
+    if: github.actor != 'dependabot[bot]' && (github.event_name != 'workflow_dispatch' || inputs.action != 'destroy')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # prod holds the env-scoped secrets/vars the plan needs (no protection rules today).
@@ -175,6 +176,7 @@ jobs:
     name: apply
     needs: plan
     if: >-
+      github.actor != 'dependabot[bot]' &&
       github.ref == 'refs/heads/master' &&
       (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.action == 'apply'))
     runs-on: ubuntu-latest
@@ -221,7 +223,7 @@ jobs:
 
   destroy:
     name: destroy
-    if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
+    if: github.actor != 'dependabot[bot]' && github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: prod
