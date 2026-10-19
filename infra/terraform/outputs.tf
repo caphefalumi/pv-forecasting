@@ -77,3 +77,8 @@ output "supabase_s3_endpoint" {
   description = "Supabase S3-compatible endpoint"
   value       = var.supabase_s3_endpoint
 }
+
+output "grafana_cloudwatch_role_arn" {
+  description = "IAM Role ARN to paste into Grafana Cloud's AWS / CloudWatch connection"
+  value       = module.iam.grafana_cloudwatch_role_arn
+}

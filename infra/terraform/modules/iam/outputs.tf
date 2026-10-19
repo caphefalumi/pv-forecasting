@@ -12,3 +12,8 @@ output "ecs_task_role_arn" {
   description = "IAM Role ARN for ECS Task"
   value       = aws_iam_role.ecs_task.arn
 }
+
+output "grafana_cloudwatch_role_arn" {
+  description = "IAM Role ARN Grafana Cloud assumes to read CloudWatch"
+  value       = aws_iam_role.grafana_cloudwatch.arn
+}
