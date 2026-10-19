@@ -38,12 +38,15 @@ CHECKPOINT_NAME = "checkpoint.pt"
 
 def run_retrain_pipeline(
     dry_run: bool = False,
+    metrics=None,
 ) -> None:
     """Run the full retrain pipeline end-to-end.
 
     Args:
         dry_run: If True, skip MLflow upload, Supabase upload, and Discord.
                  Training and evaluation still run. Useful for debugging.
+        metrics: Optional jobs.common.otel_metrics.JobMetrics; receives the test
+                 RMSE and candidate decision for Grafana.
     """
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
@@ -161,6 +164,16 @@ def run_retrain_pipeline(
                     model_version=model_version,
                 )
 
+                if metrics is not None:
+                    from jobs.common.job_results import record_retrain_metrics, safe_record
+                    safe_record(
+                        record_retrain_metrics, metrics,
+                        test_rmse=challenger_rmse,
+                        candidate_assigned=is_better,
+                        model_version=model_version,
+                        champion_rmse=champion_rmse,
+                    )
+
                 # ── Step 7b: Upload checkpoint to Supabase ─────────────────
                 if is_better or is_first_model:
                     logger.info("Uploading model checkpoint to Supabase artifacts/ …")
@@ -190,6 +203,14 @@ def run_retrain_pipeline(
                 logger.info("=== [Step 6-7/7] DRY RUN — skipping MLflow/Supabase/Discord ===")
                 logger.info("Val metrics:  %s", val_metrics)
                 logger.info("Test metrics: %s", test_metrics)
+
+                if metrics is not None:
+                    from jobs.common.job_results import record_retrain_metrics, safe_record
+                    safe_record(
+                        record_retrain_metrics, metrics,
+                        test_rmse=challenger_rmse,
+                        candidate_assigned=None,  # no champion comparison in dry run
+                    )
 
                 # Still show what the Discord message would look like
                 from jobs.retrain_tools.discord_notify import send_retrain_notification

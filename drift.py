@@ -78,10 +78,14 @@ def main(argv=None) -> None:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+    from jobs.common.job_results import DRIFT_JOB
+    from jobs.common.otel_metrics import job_metrics
     from jobs.drift_pipeline.pipeline import run_drift_pipeline
 
     try:
-        drift_detected = run_drift_pipeline(dry_run=args.dry_run)
+        # Results go to Grafana over OTLP on exit (no-op without OTLP config or in dry runs).
+        with job_metrics(DRIFT_JOB, enabled=not args.dry_run) as jm:
+            drift_detected = run_drift_pipeline(dry_run=args.dry_run, metrics=jm)
         # Exit code 2 signals drift detected to CI/CD workflows.
         # Exit code 0 signals data is stable.
         sys.exit(2 if drift_detected else 0)

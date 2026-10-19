@@ -38,11 +38,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # ── Public entry point ─────────────────────────────────────────────────────────
 
-def run_drift_pipeline(dry_run: bool = False) -> bool:
+def run_drift_pipeline(dry_run: bool = False, metrics=None) -> bool:
     """Run the full data drift detection pipeline end-to-end.
 
     Args:
         dry_run: If True, skip MLflow logging and Discord notification.
+        metrics: Optional jobs.common.otel_metrics.JobMetrics; receives the drift
+                 report for Grafana.
 
     Returns:
         drift_detected (bool): True if significant data drift was found.
@@ -82,6 +84,10 @@ def run_drift_pipeline(dry_run: bool = False) -> bool:
         # ── Step 2: Drift detection ────────────────────────────────────────────
         logger.info("=== [Step 2/4] Running drift detection ===")
         report = detect_drift(df_reference, df_current)
+
+        if metrics is not None:
+            from jobs.common.job_results import record_drift_metrics, safe_record
+            safe_record(record_drift_metrics, metrics, report)
 
         # ── Step 3: Console summary ────────────────────────────────────────────
         logger.info("=== [Step 3/4] Printing summary ===")

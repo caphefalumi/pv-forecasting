@@ -35,12 +35,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # ── Public entry point ─────────────────────────────────────────────────────────
 
-def run_evaluate_pipeline(dry_run: bool = False) -> bool:
+def run_evaluate_pipeline(dry_run: bool = False, metrics=None) -> bool:
     """Run the full champion evaluation pipeline end-to-end.
 
     Args:
         dry_run: If True, skip MLflow logging and Discord.
                  Data loading, inference, and metrics still run.
+        metrics: Optional jobs.common.otel_metrics.JobMetrics; receives the live
+                 metrics and retrain decision for Grafana.
 
     Returns:
         needs_retrain (bool): True if retrain is recommended.
@@ -103,6 +105,16 @@ def run_evaluate_pipeline(dry_run: bool = False) -> bool:
         # ── Step 5: Drift decision ─────────────────────────────────────────────
         logger.info("=== [Step 5/5] Drift decision & reporting ===")
         needs_retrain, reason = decide_retrain(live_rmse, champion_test_rmse)
+
+        if metrics is not None:
+            from jobs.common.job_results import record_eval_metrics, safe_record
+            safe_record(
+                record_eval_metrics, metrics,
+                live_metrics=live_metrics,
+                champion_version=champion_version,
+                champion_test_rmse=champion_test_rmse,
+                needs_retrain=needs_retrain,
+            )
 
         # ── Print the single decisive console summary ──────────────────────────
         _print_summary(

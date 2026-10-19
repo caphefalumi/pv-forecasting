@@ -32,6 +32,9 @@ Each drift run records:
     - feature_ks_stat        : KS statistic per feature
     - feature_ks_pvalue      : KS p-value per feature
     - feature_mean_delta     : cur_mean - ref_mean per feature
+
+  Metrics (per-feature, by name):
+    - ks_stat_<feature>      : KS statistic, e.g. ks_stat_ghi_fc
 """
 
 from __future__ import annotations
@@ -119,6 +122,16 @@ def log_drift_run(
             mlflow.log_metric("feature_ks_stat",    fr.ks_stat,    step=i)
             mlflow.log_metric("feature_ks_pvalue",  fr.ks_pvalue,  step=i)
             mlflow.log_metric("feature_mean_delta", fr.mean_delta, step=i)
+
+        # ── Per-feature KS statistic by name (readable in the MLflow UI) ──────
+        from jobs.common.job_results import mlflow_safe_name
+
+        named_ks = {
+            f"ks_stat_{mlflow_safe_name(fr.feature)}": fr.ks_stat
+            for fr in report.feature_results
+        }
+        if named_ks:
+            mlflow.log_metrics(named_ks)
 
         # ── Feature drift table as artifact (Markdown) ────────────────────────
         import tempfile, os

@@ -89,10 +89,14 @@ def main(argv=None) -> None:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+    from jobs.common.job_results import EVAL_JOB
+    from jobs.common.otel_metrics import job_metrics
     from jobs.evaluate_pipeline.pipeline import run_evaluate_pipeline
 
     try:
-        needs_retrain = run_evaluate_pipeline(dry_run=args.dry_run)
+        # Results go to Grafana over OTLP on exit (no-op without OTLP config or in dry runs).
+        with job_metrics(EVAL_JOB, enabled=not args.dry_run) as jm:
+            needs_retrain = run_evaluate_pipeline(dry_run=args.dry_run, metrics=jm)
         # Exit code 2 signals "retrain needed" to CI/CD or shell scripts.
         # Exit code 0 signals "champion is OK".
         sys.exit(2 if needs_retrain else 0)

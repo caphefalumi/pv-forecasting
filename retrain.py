@@ -65,10 +65,14 @@ def main(argv=None) -> None:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+    from jobs.common.job_results import RETRAIN_JOB
+    from jobs.common.otel_metrics import job_metrics
     from jobs.retrain_pipeline.pipeline import run_retrain_pipeline
 
     try:
-        run_retrain_pipeline(dry_run=args.dry_run)
+        # Results go to Grafana over OTLP on exit (no-op without OTLP config or in dry runs).
+        with job_metrics(RETRAIN_JOB, enabled=not args.dry_run) as jm:
+            run_retrain_pipeline(dry_run=args.dry_run, metrics=jm)
     except Exception as exc:
         logger.error("❌ Retrain pipeline failed: %s", exc, exc_info=args.verbose)
         sys.exit(1)

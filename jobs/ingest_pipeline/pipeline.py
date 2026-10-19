@@ -41,6 +41,7 @@ def run_ingest_pipeline(
     skip_fetch: bool = False,
     until: str | None = None,
     dry_run: bool = False,
+    metrics=None,
 ) -> None:
     """
     Run the full ingest pipeline end-to-end with DVC versioning.
@@ -49,6 +50,8 @@ def run_ingest_pipeline(
         skip_fetch: If True, skip the pvdata fetch+build step (use existing snapshot).
         until:      Pipeline cutoff date "YYYY-MM-DD" (default: yesterday Darwin time).
         dry_run:    If True, skip upload, dvc push, and git commit.
+        metrics:    Optional jobs.common.otel_metrics.JobMetrics; receives row counts,
+                    data lag, schema violations and QC flag counts for Grafana.
     """
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
@@ -103,6 +106,16 @@ def run_ingest_pipeline(
     logger.info("train_table: %d rows × %d cols", *df.shape)
 
     df_usable = filter_usable_rows(df)
+
+    if metrics is not None:
+        from jobs.common.job_results import record_ingest_metrics, safe_record
+        from jobs.ingest_tools.quality import summarize_ingest
+
+        def _record_quality() -> None:
+            record_ingest_metrics(metrics, summarize_ingest(df, df_usable, latest_ts=latest_ts))
+
+        safe_record(_record_quality)
+
     df_export = prepare_export_df(df_usable)
     monthly = split_by_month(df_export)  # dict: {"2024-01": df, ..., "2026-10": df}
 
@@ -188,6 +201,10 @@ def run_ingest_pipeline(
 
         # Update raw data snapshot on Supabase so other machines get latest chunks
         publish_raw_snapshot(DATA_DIR)
+
+    if metrics is not None:
+        from jobs.common.job_results import record_ingest_uploads, safe_record
+        safe_record(record_ingest_uploads, metrics, len(uploaded_files))
 
     # ── Summary ────────────────────────────────────────────────────────────────
     logger.info("=== Ingest pipeline complete ===")
