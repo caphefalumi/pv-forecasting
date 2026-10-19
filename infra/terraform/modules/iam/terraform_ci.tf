@@ -4,8 +4,8 @@
 #   * terraform-write - the create/update/delete actions `terraform apply` needs
 # Scoped to this account, the deploy region and "${var.project_name}-*" names wherever the
 # service supports resource-level permissions; Describe/List APIs that do not are left on "*".
-# NOTE: the role can update its own policies (Terraform manages them), so anyone who can run
-# the prod environment on master can widen them. Keep prod restricted to master/reviewers.
+# The DenySelfEscalation statement blocks CI from editing its own role or these two policies;
+# apply changes to them locally (terraform apply -target=...) with admin credentials.
 
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
@@ -150,6 +150,30 @@ resource "aws_iam_policy" "terraform_write" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
+      {
+        # Stop CI from escalating its own access: it may not change its own role's
+        # policies or trust, or rewrite the two Terraform CI policies. Changes to these
+        # resources are applied locally by an admin.
+        Sid    = "DenySelfEscalation"
+        Effect = "Deny"
+        Action = [
+          "iam:Put*",
+          "iam:Attach*",
+          "iam:Detach*",
+          "iam:DeleteRolePolicy",
+          "iam:DeleteRolePermissionsBoundary",
+          "iam:UpdateAssumeRolePolicy",
+          "iam:CreatePolicyVersion",
+          "iam:DeletePolicyVersion",
+          "iam:SetDefaultPolicyVersion",
+          "iam:DeletePolicy"
+        ]
+        Resource = [
+          aws_iam_role.github_actions.arn,
+          "arn:aws:iam::${local.account_id}:policy/${local.prefix}-terraform-read",
+          "arn:aws:iam::${local.account_id}:policy/${local.prefix}-terraform-write"
+        ]
+      },
       {
         Sid      = "AcmRequest"
         Effect   = "Allow"
