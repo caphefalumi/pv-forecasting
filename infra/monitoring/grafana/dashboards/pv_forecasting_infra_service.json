@@ -303,7 +303,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "avg(aws_ecs_cpuutilization_average{ClusterName=\"pv-forecasting-cluster\"})",
+          "expr": "avg(aws_ecs_cpuutilization_average{dimension_ClusterName=\"pv-forecasting-cluster\"})",
           "legendFormat": "Cluster CPU %",
           "refId": "A"
         }
@@ -464,7 +464,7 @@
         "type": "prometheus",
         "uid": "grafanacloud-prom"
       },
-      "description": "ECS Fargate CPU utilization across solar-api (0.5 vCPU), mlflow-server (0.5 vCPU), solar-drift (1 vCPU), and solar-retrain (2 vCPU).",
+      "description": "ECS Fargate CPU utilization (CloudWatch AWS/ECS, Average) for the ECS services pv-forecasting-fastapi-service (solar-api, 0.5 vCPU) and pv-forecasting-mlflow-service (mlflow-server, 0.5 vCPU).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -494,8 +494,8 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "aws_ecs_cpuutilization_average{ClusterName=\"pv-forecasting-cluster\"}",
-          "legendFormat": "CPU % — {{ServiceName}}",
+          "expr": "aws_ecs_cpuutilization_average{dimension_ClusterName=\"pv-forecasting-cluster\"}",
+          "legendFormat": "CPU % — {{dimension_ServiceName}}",
           "refId": "A"
         }
       ],
@@ -507,7 +507,7 @@
         "type": "prometheus",
         "uid": "grafanacloud-prom"
       },
-      "description": "ECS Fargate Memory utilization across solar-api (1 GB), mlflow-server (1 GB), solar-drift (2 GB), and solar-retrain (4 GB).",
+      "description": "ECS Fargate memory utilization (CloudWatch AWS/ECS, Average) for the ECS services pv-forecasting-fastapi-service (solar-api, 1 GB) and pv-forecasting-mlflow-service (mlflow-server, 1 GB).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -537,8 +537,8 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "aws_ecs_memory_utilization_average{ClusterName=\"pv-forecasting-cluster\"}",
-          "legendFormat": "Memory % — {{ServiceName}}",
+          "expr": "aws_ecs_memory_utilization_average{dimension_ClusterName=\"pv-forecasting-cluster\"}",
+          "legendFormat": "Memory % — {{dimension_ServiceName}}",
           "refId": "B"
         }
       ],
@@ -588,7 +588,7 @@
             "uid": "grafanacloud-logs"
           },
           "editorMode": "code",
-          "expr": "{service=\"solar-api\"} |= \"\"",
+          "expr": "{service_name=\"solar-api\"} |= \"\"",
           "queryType": "range",
           "refId": "A"
         }
