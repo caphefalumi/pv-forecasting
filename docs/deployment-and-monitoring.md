@@ -45,16 +45,16 @@ Rather than relying solely on fixed cron offsets that could run evaluation again
 
 1. **Daily MLOps State Machine (`pv-forecasting-daily-pipeline`):**
    ```text
-   IngestAndPreprocess (Retry 2x, Catch -> SkipEvaluationOnIngestFailure)
+   IngestAndPreprocess (Retry 2x, Catch or exit code != 0 -> SkipEvaluationOnIngestFailure)
      └──► Evaluate
             └──► Drift
-                   └──► RetrainTriggerChoice (if LastTaskStatus == "DEGRADED" -> TriggerEarlyRetrain)
+                   └──► RetrainTriggerChoice (Evaluate/Drift exit 1 -> DailyJobFailed; exit 2 -> TriggerEarlyRetrain)
    ```
 2. **Retraining State Machine (`pv-forecasting-retraining-pipeline`):**
    ```text
    RetrainChallenger (Retry 2x)
      └──► ValidateChallengerVsChampion
-            └──► PromotionDecision (PromoteChallengerReady | RejectChallenger)
+            └──► PromotionDecision (exit 1 -> RejectChallenger; default -> PromoteChallengerReady)
    ```
 
 Failed scheduled invocations are routed to the SQS Dead-Letter Queue (`pv-forecasting-pipeline-dlq`, 14-day retention) so batch failures never pass silently.

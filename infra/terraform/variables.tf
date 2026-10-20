@@ -159,3 +159,9 @@ variable "cloudflare_zone_id" {
   description = "Cloudflare Zone ID for tm-project.id.vn (Dashboard → Overview). Skips zone name lookup when set."
   default     = "d57ab9087f88ee90bd2bde21e86a83f4"
 }
+
+variable "api_health_check_grace_period_seconds" {
+  description = "Seconds ECS ignores ALB health checks after an API task starts (Champion model load time)"
+  type        = number
+  default     = 180
+}
