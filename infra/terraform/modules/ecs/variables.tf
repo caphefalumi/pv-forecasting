@@ -139,3 +139,9 @@ variable "cors_origins" {
     "https://pv-forecasting-caphefalumis-projects.vercel.app",
   ]
 }
+
+variable "api_health_check_grace_period_seconds" {
+  description = "Seconds ECS ignores ALB health checks after an API task starts (Champion model load time)"
+  type        = number
+  default     = 180
+}

@@ -271,6 +271,12 @@ resource "aws_sfn_state_machine" "daily_pipeline" {
           TaskDefinition       = aws_ecs_task_definition.solar_ingest.arn
           NetworkConfiguration = local.ecs_network_config
         }
+        # runTask.sync succeeds whenever the task stops, whatever the exit code,
+        # so keep the container exit code for the Choice states below.
+        ResultSelector = {
+          "ExitCode.$" = "$.Containers[0].ExitCode"
+        }
+        ResultPath = "$.Ingest"
         Retry = [
           {
             ErrorEquals     = ["States.ALL"]
@@ -285,7 +291,19 @@ resource "aws_sfn_state_machine" "daily_pipeline" {
             Next        = "SkipEvaluationOnIngestFailure"
           }
         ]
-        Next = "Evaluate"
+        Next = "IngestResultChoice"
+      }
+      # ingest.py exits 1 on failure (e.g. every DKASC chunk rejected).
+      IngestResultChoice = {
+        Type = "Choice"
+        Choices = [
+          {
+            Variable      = "$.Ingest.ExitCode"
+            NumericEquals = 0
+            Next          = "Evaluate"
+          }
+        ]
+        Default = "SkipEvaluationOnIngestFailure"
       }
       Evaluate = {
         Type     = "Task"
@@ -296,7 +314,13 @@ resource "aws_sfn_state_machine" "daily_pipeline" {
           TaskDefinition       = aws_ecs_task_definition.solar_evaluate.arn
           NetworkConfiguration = local.ecs_network_config
         }
-        Next = "Drift"
+        # runTask.sync succeeds whenever the task stops, whatever the exit code,
+        # so keep the container exit code for the Choice states below.
+        ResultSelector = {
+          "ExitCode.$" = "$.Containers[0].ExitCode"
+        }
+        ResultPath = "$.Evaluate"
+        Next       = "Drift"
       }
       Drift = {
         Type     = "Task"
@@ -307,15 +331,31 @@ resource "aws_sfn_state_machine" "daily_pipeline" {
           TaskDefinition       = aws_ecs_task_definition.solar_drift.arn
           NetworkConfiguration = local.ecs_network_config
         }
-        Next = "RetrainTriggerChoice"
+        # runTask.sync succeeds whenever the task stops, whatever the exit code,
+        # so keep the container exit code for the Choice states below.
+        ResultSelector = {
+          "ExitCode.$" = "$.Containers[0].ExitCode"
+        }
+        ResultPath = "$.Drift"
+        Next       = "RetrainTriggerChoice"
       }
       RetrainTriggerChoice = {
         Type = "Choice"
+        # evaluate.py and drift.py exit 0 = OK, 2 = retrain needed / drift, 1 = error.
         Choices = [
           {
-            Variable      = "$.LastTaskStatus"
-            StringMatches = "DEGRADED"
-            Next          = "TriggerEarlyRetrain"
+            Or = [
+              { Variable = "$.Evaluate.ExitCode", NumericEquals = 1 },
+              { Variable = "$.Drift.ExitCode", NumericEquals = 1 }
+            ]
+            Next = "DailyJobFailed"
+          },
+          {
+            Or = [
+              { Variable = "$.Evaluate.ExitCode", NumericEquals = 2 },
+              { Variable = "$.Drift.ExitCode", NumericEquals = 2 }
+            ]
+            Next = "TriggerEarlyRetrain"
           }
         ]
         Default = "DailyPipelineSucceeded"
@@ -338,6 +378,11 @@ resource "aws_sfn_state_machine" "daily_pipeline" {
         Type  = "Fail"
         Error = "IngestionFailed"
         Cause = "Persistent ingestion failure; skipping downstream evaluation against incomplete data."
+      }
+      DailyJobFailed = {
+        Type  = "Fail"
+        Error = "DailyJobFailed"
+        Cause = "Evaluate or Drift exited with code 1; see the pipeline-jobs CloudWatch log group."
       }
     }
   })
@@ -380,14 +425,21 @@ resource "aws_sfn_state_machine" "retraining_pipeline" {
           TaskDefinition       = aws_ecs_task_definition.solar_evaluate.arn
           NetworkConfiguration = local.ecs_network_config
         }
-        Next = "PromotionDecision"
+        # runTask.sync succeeds whenever the task stops, whatever the exit code,
+        # so keep the container exit code for the Choice states below.
+        ResultSelector = {
+          "ExitCode.$" = "$.Containers[0].ExitCode"
+        }
+        ResultPath = "$.Validate"
+        Next       = "PromotionDecision"
       }
       PromotionDecision = {
         Type = "Choice"
         Choices = [
           {
-            Variable      = "$.ValidationStatus"
-            StringMatches = "REJECTED"
+            # Validation errored. Promotion itself stays manual (promote.py).
+            Variable      = "$.Validate.ExitCode"
+            NumericEquals = 1
             Next          = "RejectChallenger"
           }
         ]

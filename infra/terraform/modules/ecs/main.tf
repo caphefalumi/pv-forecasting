@@ -123,6 +123,16 @@ resource "aws_ecs_service" "fastapi" {
   deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = 100
 
+  # Safe rollout: if new tasks keep failing ALB health checks, ECS stops the
+  # deployment and rolls back to the last steady task definition.
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  # Time for the API to load the Champion model before ALB health checks count.
+  health_check_grace_period_seconds = var.api_health_check_grace_period_seconds
+
   network_configuration {
     subnets          = var.private_subnet_ids
     security_groups  = [var.ecs_security_group_id]
@@ -222,6 +232,11 @@ resource "aws_ecs_service" "mlflow" {
   task_definition = aws_ecs_task_definition.mlflow.arn
   desired_count   = 1
   launch_type     = "FARGATE"
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
 
   network_configuration {
     subnets          = var.private_subnet_ids

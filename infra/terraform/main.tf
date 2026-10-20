@@ -74,31 +74,32 @@ module "iam" {
 
 # ── Module 6: ECS Fargate Cluster & Services ──────────────────────────────────
 module "ecs" {
-  source                      = "./modules/ecs"
-  project_name                = var.project_name
-  aws_region                  = var.aws_region
-  private_subnet_ids          = module.networking.private_subnet_ids
-  ecs_security_group_id       = module.security.ecs_security_group_id
-  target_group_arn            = module.alb.target_group_arn
-  ecr_repository_url          = module.ecr.backend_repository_url
-  mlflow_ecr_repository_url   = module.ecr.mlflow_repository_url
-  ecs_execution_role_arn      = module.iam.ecs_execution_role_arn
-  ecs_task_role_arn           = module.iam.ecs_task_role_arn
-  supabase_url                = var.supabase_url
-  supabase_service_role_key   = var.supabase_service_role_key
-  mlflow_tracking_uri         = var.mlflow_tracking_uri
-  mlflow_artifact_root        = local.mlflow_artifact_root
-  supabase_storage_bucket     = local.supabase_storage_bucket
-  supabase_s3_endpoint        = var.supabase_s3_endpoint
-  supabase_s3_access_key      = var.supabase_s3_access_key
-  supabase_s3_secret_key      = var.supabase_s3_secret_key
-  otel_exporter_otlp_protocol = var.otel_exporter_otlp_protocol
-  otel_exporter_otlp_endpoint = var.otel_exporter_otlp_endpoint
-  otel_exporter_otlp_headers  = var.otel_exporter_otlp_headers
-  grafana_otlp_instance_id    = var.grafana_otlp_instance_id
-  grafana_cloud_api_token     = var.grafana_cloud_api_token
-  api_desired_count           = var.api_desired_count
-  cors_origins                = var.cors_origins
+  source                                = "./modules/ecs"
+  project_name                          = var.project_name
+  aws_region                            = var.aws_region
+  private_subnet_ids                    = module.networking.private_subnet_ids
+  ecs_security_group_id                 = module.security.ecs_security_group_id
+  target_group_arn                      = module.alb.target_group_arn
+  ecr_repository_url                    = module.ecr.backend_repository_url
+  mlflow_ecr_repository_url             = module.ecr.mlflow_repository_url
+  ecs_execution_role_arn                = module.iam.ecs_execution_role_arn
+  ecs_task_role_arn                     = module.iam.ecs_task_role_arn
+  supabase_url                          = var.supabase_url
+  supabase_service_role_key             = var.supabase_service_role_key
+  mlflow_tracking_uri                   = var.mlflow_tracking_uri
+  mlflow_artifact_root                  = local.mlflow_artifact_root
+  supabase_storage_bucket               = local.supabase_storage_bucket
+  supabase_s3_endpoint                  = var.supabase_s3_endpoint
+  supabase_s3_access_key                = var.supabase_s3_access_key
+  supabase_s3_secret_key                = var.supabase_s3_secret_key
+  otel_exporter_otlp_protocol           = var.otel_exporter_otlp_protocol
+  otel_exporter_otlp_endpoint           = var.otel_exporter_otlp_endpoint
+  otel_exporter_otlp_headers            = var.otel_exporter_otlp_headers
+  grafana_otlp_instance_id              = var.grafana_otlp_instance_id
+  grafana_cloud_api_token               = var.grafana_cloud_api_token
+  api_desired_count                     = var.api_desired_count
+  api_health_check_grace_period_seconds = var.api_health_check_grace_period_seconds
+  cors_origins                          = var.cors_origins
 }
 
 # ── Module 7: EventBridge Pipeline Scheduler ──────────────────────────────────
