@@ -41,7 +41,7 @@ jobs:
       frontend_origin: ${{ steps.origin.outputs.url }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -49,7 +49,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Cache Bun packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
@@ -95,7 +95,7 @@ jobs:
 
       # Only the build output and project link; the pulled .env files stay on the runner.
       - name: Upload prebuilt output
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vercel-prebuilt
           path: |
@@ -120,10 +120,10 @@ jobs:
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download prebuilt output
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: vercel-prebuilt
           path: apps/frontend/.vercel
