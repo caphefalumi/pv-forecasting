@@ -1,0 +1,672 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: cos40007-mlops-alerts
+    folder: COS40007 MLOps - PV Forecasting
+    interval: 1m
+    rules:
+      # ── Rule 1: Critical Ingestion Failure or Schema Violation (Exported UID preserved) ─
+      - uid: fg160jrgozf9ce
+        title: '[Critical] Ingestion Failure or Schema Violation'
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: pv_ingestion_schema_violations_total
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0 # schema_violations_threshold = 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0 # threshold constant = 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    type: last
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: OK
+        execErrState: Alerting
+        annotations:
+          description: Ingestion failure, missing fields, or physically impossible values (e.g. non-zero irradiance outside daylight hours). Immediate notification required.
+          summary: 'CRITICAL: PV Data Ingestion Failure or Schema Violation'
+        labels:
+          action: immediate_notification
+          component: solar-ingest
+          severity: critical
+        isPaused: false
+
+      # ── Rule 2: Warning Model nMAE Above Threshold (Exported UID preserved) ─────
+      - uid: bg160l41ewdtsb
+        title: '[Warning] Model nMAE Above Threshold (3 Consecutive Days)'
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: pv_model_nmae{cohort="all"}
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.12 # nmae_alert_threshold = 0.12 (12%)
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.12 # threshold constant = 0.12
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    type: last
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: OK
+        execErrState: OK
+        for: 3d
+        annotations:
+          description: Model nMAE has remained above the 0.12 alert threshold for 3 consecutive days (72h). Emits retraining candidate signal.
+          summary: 'WARNING: Model nMAE Above Threshold for 3 Consecutive Days — Retraining Candidate'
+        labels:
+          action: retraining_candidate
+          component: solar-evaluate
+          severity: warning
+        isPaused: false
+
+      # ── Rule 3: Info Feature Drift Above Threshold (Exported UID preserved) ─────
+      - uid: eg160l41hea68d
+        title: '[Info] Feature Drift Above Threshold (Diagnostic Only)'
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: avg(drift_score{site="dkasc"})
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.25 # drift_score_threshold = 0.25
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.25 # threshold constant = 0.25
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    type: last
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        noDataState: OK
+        execErrState: OK
+        for: 1h
+        annotations:
+          description: Feature covariate drift (PSI / KS score) exceeded 0.25. Seasonal weather shift expected in solar domain — diagnostic only, does NOT trigger retraining alone.
+          summary: 'INFO: Feature Covariate Drift Above Threshold (Diagnostic Only)'
+        labels:
+          action: diagnostic_only
+          component: solar-drift
+          severity: info
+        isPaused: false
+
+      # ── Rule 4: Critical API Down (~5 min) ───────────────────────────────────────
+      - uid: pv-api-down
+        title: '[Critical] FastAPI Prediction Service Down'
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: absent_over_time(http_requests_total{service="solar-api"}[5m])
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0 # absent_threshold = 0 (fires when absent == 1)
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0 # threshold constant = 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    type: last
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        for: 5m
+        noDataState: Alerting
+        execErrState: Alerting
+        annotations:
+          description: FastAPI prediction service (solar-api) has stopped reporting telemetry or serving requests for ~5 minutes.
+          summary: 'CRITICAL: FastAPI Service (solar-api) Down'
+        labels:
+          action: immediate_notification
+          component: solar-api
+          severity: critical
+        isPaused: false
+
+      # ── Rule 5: Warning 5xx Error Rate > 0.1% over 10 min ─────────────────────────
+      - uid: pv-api-5xx-rate
+        title: '[Warning] FastAPI 5xx Error Rate Above 0.1%'
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: sum(rate(http_requests_total{service="solar-api",status=~"5.."}[10m])) / clamp_min(sum(rate(http_requests_total{service="solar-api"}[10m])), 1e-9)
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.001 # error_rate_5xx_threshold = 0.001 (0.1%)
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.001 # threshold constant = 0.001 (0.1%)
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    type: last
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        for: 10m
+        noDataState: OK
+        execErrState: OK
+        annotations:
+          description: HTTP 5xx server error rate on solar-api exceeded 0.1% (0.001) over a 10-minute evaluation window.
+          summary: 'WARNING: FastAPI 5xx Error Rate > 0.1% over 10m'
+        labels:
+          action: investigate_backend_errors
+          component: solar-api
+          severity: warning
+        isPaused: false
+
+      # ── Rule 6: Warning P99 Latency > 1s over 10 min ─────────────────────────────
+      - uid: pv-api-p99-latency
+        title: '[Warning] FastAPI P99 Latency Above 1s'
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service="solar-api"}[10m])) by (le))
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1 # latency_p99_threshold_seconds = 1.0 (Seminar 9 target SLA is 100ms)
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1 # threshold constant = 1.0s
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    type: last
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        for: 10m
+        noDataState: OK
+        execErrState: OK
+        annotations:
+          description: 99th percentile HTTP response duration for solar-api exceeded 1.0s over a 10-minute window (Seminar 9 target SLA is 100ms).
+          summary: 'WARNING: FastAPI P99 Latency > 1s over 10m'
+        labels:
+          action: investigate_latency
+          component: solar-api
+          severity: warning
+        isPaused: false
+
+      # ── Rule 7: Warning Stale Data (> 26h since last ingest) ───────────────────────
+      - uid: pv-data-ingest-stale
+        title: '[Warning] PV Data Ingestion Stale (> 26h)'
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: (time() - last_over_time(pv_batch_job_last_run_timestamp_seconds{job_name="solar-ingest"}[8d])) / 3600
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 26 # staleness_threshold_hours = 26 (24h schedule + 2h margin)
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 26 # threshold constant = 26 hours
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    type: last
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        for: 10m
+        noDataState: Alerting
+        execErrState: Alerting
+        annotations:
+          description: The daily solar-ingest batch task has not completed for over 26 hours (expected daily schedule + 2-hour grace margin).
+          summary: 'WARNING: PV Data Ingest Job Stale (> 26h)'
+        labels:
+          action: trigger_pipeline_investigation
+          component: solar-ingest
+          severity: warning
+        isPaused: false
+
+      # ── Rule 8: Critical MLOps Batch Job Failed (pv_batch_job_success == 0) ────────
+      - uid: pv-batch-job-failed
+        title: '[Critical] MLOps Batch Job Failed'
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: last_over_time(pv_batch_job_success[26h])
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1 # success_threshold = 1 (fires when pv_batch_job_success < 1, i.e. 0)
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1 # threshold constant = 1 (fires on 0)
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    type: last
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        for: 5m
+        noDataState: OK
+        execErrState: Alerting
+        annotations:
+          description: Scheduled batch pipeline job {{ $labels.job_name }} exited with failure status (pv_batch_job_success == 0). Check CloudWatch /ecs/pv-forecasting-pipeline-jobs logs.
+          summary: 'CRITICAL: MLOps Batch Job {{ $labels.job_name }} Failed'
+        labels:
+          action: immediate_notification
+          component: mlops-batch-jobs
+          severity: critical
+        isPaused: false
+
+      # ── Rule 9: Critical Composite Data Quality / Staleness AND Model Degradation ─
+      - uid: pv-composite-dq-model
+        title: '[Critical] Concurrent Data Staleness and Model Degradation'
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: grafanacloud-prom
+            model:
+              expr: ((time() - last_over_time(pv_batch_job_last_run_timestamp_seconds{job_name="solar-ingest"}[8d])) / 3600 > 26) and on() (last_over_time(pv_eval_needs_retrain[26h]) == 1)
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0 # composite_match_threshold = 0 (fires when both conditions match)
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0 # threshold constant = 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    type: last
+              expression: B
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        for: 10m
+        noDataState: OK
+        execErrState: OK
+        annotations:
+          description: Dual failure condition met - Data ingestion is stale (> 26h since last ingest run) AND model evaluation indicates degradation (pv_eval_needs_retrain == 1). Immediate operational triage required.
+          summary: 'CRITICAL: Composite Alert - Ingestion Stale AND Model Degradation Detected'
+        labels:
+          action: immediate_incident_escalation
+          component: composite-dq-model
+          severity: critical
+        isPaused: false
