@@ -14,7 +14,7 @@ Run from the repo root (pv-forecasting/):
     python ingest.py --dry-run -v           # verbose dry-run for debugging
 
 What happens each run:
-  1. pvdata run  →  fetches new DKASC + Open-Meteo data, rebuilds train_table.parquet
+  1. pvdata run  ->  fetches new DKASC + Open-Meteo data, rebuilds train_table.parquet
   2. train_table is split into monthly CSVs  (data/exports/YYYY-MM.csv)
   3. Each CSV is uploaded to Supabase Storage:  processed/YYYY-MM.csv  (upsert)
   4. DVC tracks each CSV version locally and pushes to Supabase S3 remote
